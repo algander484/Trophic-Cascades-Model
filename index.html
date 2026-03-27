@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Trophic Cascades Model</title>
+    <title>Nutrient–Algae–Daphnia Model</title>
     <style>
       body {
         font-family: system-ui, -apple-system, Roboto, "Helvetica Neue", Arial;
@@ -57,6 +57,7 @@
         margin-top: 8px;
         font-size: 13px;
         align-items: center;
+        flex-wrap: wrap;
       }
       .dot {
         display: inline-block;
@@ -87,21 +88,13 @@
         padding: 4px 8px;
         cursor: pointer;
       }
-
-      /* Hide the instructor panel completely from students */
       #instructor-panel {
         display: none !important;
       }
     </style>
 
-    <script
-      crossorigin
-      src="https://unpkg.com/react@18/umd/react.development.js"
-    ></script>
-    <script
-      crossorigin
-      src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"
-    ></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   </head>
   <body>
@@ -110,76 +103,71 @@
     <script type="text/babel">
       const { useState, useRef, useEffect } = React;
 
-      function TrophicCascadeRK4() {
-        // Constants
-        const INITIAL_P = 30;
-        const SIM_DURATION = 7.0; // days
-        const VOLUME_ML = 6.0; // 6 mL in each dish
-        const B_SCALE = 1e6; // bacteria unit: millions
-        const FULL_CONC = 1e9; // full strength (cells/mL)
+      function NutrientAlgaeDaphniaModel() {
+        const SIM_DURATION = 14.0; // days
+        const CHECKPOINT_DAY = 7.0; // one-week checkpoint
+        const VOLUME_ML = 6.0;
+        const FULL_N = 1000;
+        const INITIAL_A = 28;
+        const INITIAL_D = 2;
 
-        // Student-facing state
-        const [frac, setFrac] = useState(1.0); // nutrient fraction (0..1)
-        const [conc, setConc] = useState(FULL_CONC);
-        const [B, setB] = useState(Math.round(FULL_CONC * VOLUME_ML)); // bacteria cells
-        const [P, setP] = useState(INITIAL_P); // paramecia count
-        const [D, setD] = useState(2); // didinium count (students can adjust 0..10)
-
-        // Wheat seed toggle (checkbox control)
-        const [seedPresent, setSeedPresent] = useState(true);
-        const seedRelease = 1e7; // fixed release rate when present (cells/mL/day)
-
-        // Student controls (fixed)
-        const speed = 8; // locked at max
-        const noise = 0; // noise off
+        const [frac, setFrac] = useState(1.0);
+        const [conc, setConc] = useState(FULL_N);
+        const [N, setN] = useState(Math.round(FULL_N * VOLUME_ML));
+        const [A, setA] = useState(INITIAL_A);
+        const [D, setD] = useState(INITIAL_D);
+        const [pulsePresent, setPulsePresent] = useState(true);
+        const nutrientPulse = 10; // nutrient units / mL / day
+        const speed = 8;
+        const noise = 0;
         const [running, setRunning] = useState(false);
 
-        // Instructor-fixed parameters (Balanced preset) — locked
-        const [dt, setDt] = useState(0.005); // integration step (days)
-        const [r, setR] = useState(2.5); // bacterial growth / day
-        const [cBP, setCBP] = useState(0.005); // B->P encounter (per P per million B per day)
-        const [tauBP, setTauBP] = useState(0.06); // handling time for P feeding on bacteria (days)
-        const [eBP, setEBP] = useState(0.25); // B->P conversion
-        const [cPD, setCPD] = useState(0.045); // P->D encounter (per D per P per day)
-        const [h, setH] = useState(0.1); // predator handling time (days)
-        const [ePD, setEPD] = useState(0.55); // P->D conversion
-        const [mP, setMP] = useState(0.05); // paramecia mortality / day
-        const [mD, setMD] = useState(0.05); // didinium mortality / day
-        const [predEff, setPredEff] = useState(1.2); // predator effectiveness multiplier
+        const [dt, setDt] = useState(0.005);
+        const [rA, setRA] = useState(1.25);
+        const [kN, setKN] = useState(260);
+        const [cNA, setCNA] = useState(0.018);
+        const [tauNA, setTauNA] = useState(0.02);
+        const [eNA, setENA] = useState(0.55);
+        const [cAD, setCAD] = useState(0.022);
+        const [h, setH] = useState(0.06);
+        const [eAD, setEAD] = useState(0.34);
+        const [mA, setMA] = useState(0.04);
+        const [mD, setMD] = useState(0.03);
+        const [recycleA, setRecycleA] = useState(0.25);
+        const [recycleD, setRecycleD] = useState(0.15);
+        const [recycleG, setRecycleG] = useState(0.12);
 
-        // refs & history
         const canvasRef = useRef(null);
-        const plotPRef = useRef(null);
+        const plotNRef = useRef(null);
+        const plotARef = useRef(null);
         const plotDRef = useRef(null);
         const rafRef = useRef(null);
         const tRef = useRef(0);
         const [history, setHistory] = useState([]);
 
-        // update when nutrient fraction changes
         useEffect(() => {
-          const newConc = FULL_CONC * Math.max(0, Math.min(1, frac));
+          const newConc = FULL_N * Math.max(0, Math.min(1, frac));
           setConc(newConc);
-          const initB = Math.round(newConc * VOLUME_ML);
-          setB(initB);
-          setP(INITIAL_P);
+          setN(Math.round(newConc * VOLUME_ML));
+          setA(INITIAL_A);
+          setD(INITIAL_D);
           setHistory([]);
           tRef.current = 0;
           setRunning(false);
         }, [frac]);
 
-        // draw petri dish visuals
-        function drawDish(bCount, pCount, dCount) {
+        function drawDish(nCount, aCount, dCount) {
           const canvas = canvasRef.current;
           if (!canvas) return;
           canvas.width = 900;
           canvas.height = 600;
           const ctx = canvas.getContext("2d");
           ctx.clearRect(0, 0, canvas.width, canvas.height);
-          const w = canvas.width,
-            h = canvas.height,
-            cx = w / 2,
-            cy = h / 2,
-            R = Math.min(w, h) / 2 - 40;
+          const w = canvas.width;
+          const h = canvas.height;
+          const cx = w / 2;
+          const cy = h / 2;
+          const R = Math.min(w, h) / 2 - 40;
 
           ctx.fillStyle = "#ffffff";
           ctx.beginPath();
@@ -195,21 +183,17 @@
             return { x: cx + r * Math.cos(t), y: cy + r * Math.sin(t) };
           }
 
-          const fullInit = Math.round(FULL_CONC * VOLUME_ML);
-          const displayMax = fullInit * 2;
-          const nDotsMax = 900;
-          const bdots = Math.min(
-            nDotsMax,
-            Math.max(0, Math.round((bCount / displayMax) * nDotsMax))
-          );
-          for (let i = 0; i < bdots; i++) {
+          const nMax = Math.max(1, Math.round(FULL_N * VOLUME_ML * 2));
+          const nDotsMax = 850;
+          const ndots = Math.min(nDotsMax, Math.max(0, Math.round((nCount / nMax) * nDotsMax)));
+          for (let i = 0; i < ndots; i++) {
             const p = rp();
-            ctx.fillStyle = "rgba(59,130,246,0.45)";
+            ctx.fillStyle = "rgba(234,179,8,0.42)";
             ctx.fillRect(p.x, p.y, 1.4, 1.4);
           }
 
-          const pDots = Math.min(260, Math.round(pCount));
-          for (let i = 0; i < pDots; i++) {
+          const aDots = Math.min(260, Math.round(aCount));
+          for (let i = 0; i < aDots; i++) {
             const p = rp();
             ctx.save();
             ctx.translate(p.x, p.y);
@@ -221,7 +205,7 @@
             ctx.restore();
           }
 
-          const dDots = Math.min(90, Math.round(dCount));
+          const dDots = Math.min(120, Math.round(dCount));
           for (let i = 0; i < dDots; i++) {
             const p = rp();
             ctx.save();
@@ -237,100 +221,50 @@
           ctx.fillStyle = "#0f172a";
           ctx.font = "15px system-ui";
           ctx.fillText("Time: " + tRef.current.toFixed(2) + " days", 16, 28);
-          ctx.fillText(
-            "Bacteria: " + Math.round(bCount).toLocaleString(),
-            16,
-            50
-          );
-          ctx.fillText("Paramecium: " + Math.round(pCount), 16, 72);
-          ctx.fillText("Didinium: " + Math.round(dCount), 16, 94);
+          ctx.fillText("Nutrient: " + Math.round(nCount).toLocaleString(), 16, 50);
+          ctx.fillText("Algae: " + Math.round(aCount), 16, 72);
+          ctx.fillText("Daphnia: " + Math.round(dCount), 16, 94);
+          ctx.fillStyle = "#92400e";
+          ctx.fillText("Nutrient pulse: " + (pulsePresent ? "present" : "off"), 16, 118);
           ctx.fillStyle = "#065f46";
           ctx.fillText(
-            "Nutrient: " +
-              frac.toFixed(3) +
-              " × full (" +
-              conc.toExponential(2) +
-              " cells/mL)",
-            16,
-            118
-          );
-          ctx.fillStyle = seedPresent ? "#92400e" : "#94a3b8";
-          ctx.fillText(
-            "Wheat seed: " + (seedPresent ? "present" : "absent"),
+            "Algae model",
             16,
             140
           );
         }
 
-        // derivative function for ODEs (returns [dB_dt (cells/day), dP_dt (individuals/day), dD_dt])
         function derivatives(state) {
-          const [b, p, d] = state; // b in cells, p,d in individuals
-          const initB = Math.round(conc * VOLUME_ML);
-          const K = Math.max(1, Math.round(initB * 2.0));
+          const [n, a, d] = state;
+          const nutrientUptakePerAlga = (cNA * n) / (1 + cNA * tauNA * n);
+          const totalNutrientUptake = nutrientUptakePerAlga * a;
+          const algaeGrowthFromNutrient = rA * (n / (kN + Math.max(1, n))) * a;
+          const grazingPerDaphnia = (cAD * a) / (1 + cAD * h * a);
+          const totalGrazed = grazingPerDaphnia * d;
+          const nutrientPulseRate = pulsePresent ? nutrientPulse * VOLUME_ML : 0;
 
-          const bScaled = b / B_SCALE;
-          const KScaled = K / B_SCALE;
+          const dN_dt =
+            -totalNutrientUptake + recycleA * mA * a + recycleD * mD * d + recycleG * totalGrazed + nutrientPulseRate;
+          const dA_dt = algaeGrowthFromNutrient - totalGrazed - mA * a;
+          const dD_dt = eAD * totalGrazed - mD * d;
 
-          // bacterial logistic growth (scaled units/day)
-          let growth_s = r * bScaled * (1 - bScaled / KScaled);
-
-          // seed addition (scaled units/day) — seedPresent controlled by checkbox
-          if (seedPresent && seedRelease > 0) {
-            const seedAddCellsPerDay = seedRelease * VOLUME_ML; // cells/day
-            const seedAddScaledPerDay = seedAddCellsPerDay / B_SCALE;
-            growth_s += seedAddScaledPerDay;
-          }
-
-          // saturating intake per paramecium (scaled units/day)
-          const intakePerP = (cBP * bScaled) / (1 + cBP * tauBP * bScaled);
-          const consumedByP_s = intakePerP * p; // scaled units/day
-
-          // predation Holling II (prey per predator per day)
-          const cPD_eff = cPD * predEff;
-          const perPredIntake = (cPD_eff * p) / (1 + cPD_eff * h * p);
-          const totalConsumedByD = perPredIntake * d; // prey/day
-
-          // conversions and mortalities
-          const dB_dt = (growth_s - consumedByP_s) * B_SCALE; // back to cells/day
-          const dP_dt = eBP * consumedByP_s - totalConsumedByD - mP * p;
-          const dD_dt = ePD * predEff * totalConsumedByD - mD * d;
-
-          return [dB_dt, dP_dt, dD_dt];
+          return [dN_dt, dA_dt, dD_dt];
         }
 
-        // RK4 integrator: advance (B,P,D) by dtDays
-        function rk4Step(b, p, d, dtDays) {
-          // k1
-          const [k1b, k1p, k1d] = derivatives([b, p, d]);
+        function rk4Step(n, a, d, dtDays) {
+          const [k1n, k1a, k1d] = derivatives([n, a, d]);
+          const [k2n, k2a, k2d] = derivatives([n + 0.5 * dtDays * k1n, a + 0.5 * dtDays * k1a, d + 0.5 * dtDays * k1d]);
+          const [k3n, k3a, k3d] = derivatives([n + 0.5 * dtDays * k2n, a + 0.5 * dtDays * k2a, d + 0.5 * dtDays * k2d]);
+          const [k4n, k4a, k4d] = derivatives([n + dtDays * k3n, a + dtDays * k3a, d + dtDays * k3d]);
 
-          // k2 state
-          const b2 = b + 0.5 * dtDays * k1b;
-          const p2 = p + 0.5 * dtDays * k1p;
-          const d2 = d + 0.5 * dtDays * k1d;
-          const [k2b, k2p, k2d] = derivatives([b2, p2, d2]);
-
-          // k3 state
-          const b3 = b + 0.5 * dtDays * k2b;
-          const p3 = p + 0.5 * dtDays * k2p;
-          const d3 = d + 0.5 * dtDays * k2d;
-          const [k3b, k3p, k3d] = derivatives([b3, p3, d3]);
-
-          // k4 state
-          const b4 = b + dtDays * k3b;
-          const p4 = p + dtDays * k3p;
-          const d4 = d + dtDays * k3d;
-          const [k4b, k4p, k4d] = derivatives([b4, p4, d4]);
-
-          const newB = b + (dtDays / 6) * (k1b + 2 * k2b + 2 * k3b + k4b);
-          const newP = p + (dtDays / 6) * (k1p + 2 * k2p + 2 * k3p + k4p);
+          const newN = n + (dtDays / 6) * (k1n + 2 * k2n + 2 * k3n + k4n);
+          const newA = a + (dtDays / 6) * (k1a + 2 * k2a + 2 * k3a + k4a);
           const newD = d + (dtDays / 6) * (k1d + 2 * k2d + 2 * k3d + k4d);
-
-          return [newB, newP, newD];
+          return [newN, newA, newD];
         }
 
-        // draw single-species time-series (species = 'P' or 'D')
         function drawSpeciesPlot(hist, species) {
-          const canvas = species === "P" ? plotPRef.current : plotDRef.current;
+          const canvas = species === "N" ? plotNRef.current : species === "A" ? plotARef.current : plotDRef.current;
           if (!canvas) return;
           canvas.width = 900;
           canvas.height = 200;
@@ -353,18 +287,14 @@
           if (hist.length < 2) {
             ctx.fillStyle = "#374151";
             ctx.font = "12px system-ui";
-            ctx.fillText(
-              "Time (days)",
-              margin.l + W / 2 - 28,
-              canvas.height - 12
-            );
+            ctx.fillText("Time (days)", margin.l + W / 2 - 28, canvas.height - 12);
             ctx.fillText("Count", 8, margin.t + 12);
             return;
           }
 
           const t0 = 0;
           const t1 = SIM_DURATION;
-          const values = hist.map((h) => (species === "P" ? h.P : h.D));
+          const values = hist.map((h) => (species === "N" ? h.N : species === "A" ? h.A : h.D));
           const vmax = Math.max(...values, 1);
           const Ymax = vmax * 1.15;
 
@@ -375,7 +305,6 @@
             return margin.t + (1 - v / Ymax) * H;
           }
 
-          // horizontal grid
           ctx.strokeStyle = "#f1f5f9";
           ctx.lineWidth = 1;
           ctx.beginPath();
@@ -386,7 +315,6 @@
           }
           ctx.stroke();
 
-          // axes
           ctx.strokeStyle = "#374151";
           ctx.lineWidth = 1;
           ctx.beginPath();
@@ -398,7 +326,6 @@
           ctx.lineTo(margin.l + W, margin.t + H);
           ctx.stroke();
 
-          // y labels
           ctx.fillStyle = "#374151";
           ctx.font = "12px system-ui";
           for (let i = 0; i <= 5; i++) {
@@ -407,7 +334,6 @@
             ctx.fillText(val.toString(), 8, y + 4);
           }
 
-          // x tick labels
           ctx.fillStyle = "#374151";
           ctx.font = "12px system-ui";
           for (let day = 0; day <= SIM_DURATION; day++) {
@@ -419,69 +345,66 @@
             ctx.stroke();
           }
 
-          // plot line
+          if (CHECKPOINT_DAY > t0 && CHECKPOINT_DAY < t1) {
+            const xcp = sx(CHECKPOINT_DAY);
+            ctx.save();
+            ctx.setLineDash([5, 4]);
+            ctx.strokeStyle = "#64748b";
+            ctx.beginPath();
+            ctx.moveTo(xcp, margin.t);
+            ctx.lineTo(xcp, margin.t + H);
+            ctx.stroke();
+            ctx.restore();
+            ctx.fillStyle = "#64748b";
+            ctx.fillText("Week 1", xcp - 16, margin.t + 10);
+          }
+
+          const color = species === "N" ? "#ca8a04" : species === "A" ? "#16a34a" : "#ef4444";
+          const label = species === "N" ? "Nutrient" : species === "A" ? "Algae" : "Daphnia";
+
           ctx.beginPath();
           ctx.lineWidth = 2;
-          ctx.strokeStyle = species === "P" ? "#16a34a" : "#ef4444";
+          ctx.strokeStyle = color;
           hist.forEach((pt, i) => {
             const x = sx(pt.t);
-            const y = sy(species === "P" ? pt.P : pt.D);
+            const y = sy(species === "N" ? pt.N : species === "A" ? pt.A : pt.D);
             if (i === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
           });
           ctx.stroke();
 
-          // legend/text
-          const label = species === "P" ? "Paramecium" : "Didinium";
-          ctx.fillStyle = species === "P" ? "#16a34a" : "#ef4444";
+          ctx.fillStyle = color;
           ctx.fillRect(canvas.width - 150, margin.t + 8, 10, 10);
           ctx.fillStyle = "#374151";
           ctx.fillText(label, canvas.width - 128, margin.t + 17);
-          ctx.fillStyle = "#374151";
-          ctx.fillText(
-            "Time (days)",
-            margin.l + W / 2 - 28,
-            canvas.height - 12
-          );
+          ctx.fillText("Time (days)", margin.l + W / 2 - 28, canvas.height - 12);
         }
 
-        // main loop: simulation stepping + rendering
         useEffect(() => {
           function loop() {
-            // steps per frame fixed by hidden speed
             const stepsPerFrame = Math.max(1, Math.round(speed));
+            let curN = N;
+            let curA = A;
+            let curD = D;
+
             for (let s = 0; s < stepsPerFrame; s++) {
-              const [nb, np, nd] = rk4Step(B, P, D, dt);
-              // multiplicative noise (fixed off)
-              const noiseB = 1 + (Math.random() * 2 - 1) * noise;
-              const noiseP = 1 + (Math.random() * 2 - 1) * noise;
+              const [nn, na, nd] = rk4Step(curN, curA, curD, dt);
+              const noiseN = 1 + (Math.random() * 2 - 1) * noise;
+              const noiseA = 1 + (Math.random() * 2 - 1) * noise;
               const noiseD = 1 + (Math.random() * 2 - 1) * noise;
 
-              let newB = Math.max(0, nb * noiseB);
-              let newP = Math.max(0, np * noiseP);
-              let newD = Math.max(0, nd * noiseD);
+              curN = Math.max(0, nn * noiseN);
+              curA = Math.max(0, na * noiseA);
+              curD = Math.max(0, nd * noiseD);
 
-              // clamp bacteria to reasonable max
-              const initB = Math.round(conc * VOLUME_ML);
-              const K = Math.max(1, Math.round(initB * 2.0));
-              newB = Math.min(newB, K * 10);
-
-              // commit
-              setB(newB);
-              setP(newP);
-              setD(newD);
+              setN(curN);
+              setA(curA);
+              setD(curD);
               tRef.current += dt;
 
               setHistory((h) => {
-                if (
-                  h.length === 0 ||
-                  tRef.current - h[h.length - 1].t >= 0.05
-                ) {
-                  const next = [
-                    ...h.slice(-2000),
-                    { t: tRef.current, B: newB, P: newP, D: newD },
-                  ];
-                  return next;
+                if (h.length === 0 || tRef.current - h[h.length - 1].t >= 0.05) {
+                  return [...h.slice(-2000), { t: tRef.current, N: curN, A: curA, D: curD }];
                 }
                 return h;
               });
@@ -492,16 +415,11 @@
               }
             }
 
-            // draw visuals + both plots
-            drawDish(B, P, D);
-            drawSpeciesPlot(
-              history.length ? history : [{ t: 0, B, P, D }],
-              "P"
-            );
-            drawSpeciesPlot(
-              history.length ? history : [{ t: 0, B, P, D }],
-              "D"
-            );
+            drawDish(curN, curA, curD);
+            const plotHist = history.length ? history : [{ t: 0, N, A, D }];
+            drawSpeciesPlot(plotHist, "N");
+            drawSpeciesPlot(plotHist, "A");
+            drawSpeciesPlot(plotHist, "D");
             rafRef.current = requestAnimationFrame(loop);
           }
 
@@ -510,145 +428,77 @@
           return () => {
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
           };
-          // eslint-disable-next-line
-        }, [
-          running,
-          B,
-          P,
-          D,
-          frac,
-          conc,
-          dt,
-          history,
-          cBP,
-          cPD,
-          eBP,
-          ePD,
-          mP,
-          mD,
-          r,
-          h,
-          tauBP,
-          seedPresent,
-          seedRelease,
-          predEff,
-        ]);
+        }, [running, N, A, D, frac, conc, dt, history, cNA, tauNA, eNA, cAD, eAD, mA, mD, rA, kN, h, recycleA, recycleD, recycleG, pulsePresent, nutrientPulse]);
 
-        // initial draw
         useEffect(() => {
-          drawDish(B, P, D);
-          drawSpeciesPlot([{ t: 0, B, P, D }], "P");
-          drawSpeciesPlot([{ t: 0, B, P, D }], "D");
-        }, []); // eslint-disable-line
+          drawDish(N, A, D);
+          drawSpeciesPlot([{ t: 0, N, A, D }], "N");
+          drawSpeciesPlot([{ t: 0, N, A, D }], "A");
+          drawSpeciesPlot([{ t: 0, N, A, D }], "D");
+        }, []);
 
-        // utilities
         function resetAll() {
-          const init = Math.round(conc * VOLUME_ML);
+          const initN = Math.round(conc * VOLUME_ML);
           tRef.current = 0;
           setHistory([]);
-          setP(INITIAL_P);
-          setD(2);
-          setB(init);
+          setA(INITIAL_A);
+          setD(INITIAL_D);
+          setN(initN);
           setRunning(false);
-          drawDish(init, INITIAL_P, 2);
-          drawSpeciesPlot([{ t: 0, B: init, P: INITIAL_P, D: 2 }], "P");
-          drawSpeciesPlot([{ t: 0, B: init, P: INITIAL_P, D: 2 }], "D");
+          drawDish(initN, INITIAL_A, INITIAL_D);
+          drawSpeciesPlot([{ t: 0, N: initN, A: INITIAL_A, D: INITIAL_D }], "N");
+          drawSpeciesPlot([{ t: 0, N: initN, A: INITIAL_A, D: INITIAL_D }], "A");
+          drawSpeciesPlot([{ t: 0, N: initN, A: INITIAL_A, D: INITIAL_D }], "D");
         }
 
         function startPause() {
           if (!running && tRef.current >= SIM_DURATION) {
-            // restart
             tRef.current = 0;
             setHistory([]);
-            setP(INITIAL_P);
-            const init = Math.round(conc * VOLUME_ML);
-            setB(init);
+            setA(INITIAL_A);
+            setD(INITIAL_D);
+            setN(Math.round(conc * VOLUME_ML));
           }
           setRunning((r) => !r);
         }
 
         const timeLeft = Math.max(0, (SIM_DURATION - tRef.current).toFixed(2));
-        const setFractionQuick = (v) => {
-          setFrac(v);
-        };
 
         return (
           <div className="container">
-            <h2>Trophic Cascades Model</h2>
+            <h2>Nutrient → Algae → Daphnia Model</h2>
             <p className="small">
-              Students change nutrients (fraction) and starting Didinium (0–10).
-              Instructor knobs are locked to stable defaults. Paramecia start at
-              30; nutrient volume = 6 mL.
+              Students change nutrient fraction and starting daphnia. The model runs for 14 days, and the day-7 checkpoint is highlighted in the plots.
+              This version uses algae and keeps the parameters as starting estimates for class tuning.
             </p>
 
             <div className="row">
               <div className="col card">
-                <canvas
-                  ref={canvasRef}
-                  style={{ width: "100%", height: 360 }}
-                />
+                <canvas ref={canvasRef} style={{ width: "100%", height: 360 }} />
                 <div className="control-row">
                   <button
                     onClick={startPause}
-                    style={{
-                      background: running ? "#ef4444" : "#0369a1",
-                      color: "#fff",
-                    }}
+                    style={{ background: running ? "#ef4444" : "#0369a1", color: "#fff" }}
                   >
-                    {running
-                      ? "Pause"
-                      : tRef.current >= SIM_DURATION
-                      ? "Restart"
-                      : "Start"}
+                    {running ? "Pause" : tRef.current >= SIM_DURATION ? "Restart" : "Start"}
                   </button>
                   <button onClick={resetAll}>Reset (sets D=2)</button>
-
-                  {/* Speed slider removed from UI (speed is fixed internally at max) */}
-                  {/* Noise control removed from UI (noise is fixed to 0) */}
                 </div>
 
                 <div className="legend">
-                  <div>
-                    <span
-                      className="dot"
-                      style={{ background: "#3b82f6" }}
-                    ></span>
-                    Bacteria (density)
-                  </div>
-                  <div>
-                    <span
-                      className="dot"
-                      style={{ background: "#16a34a" }}
-                    ></span>
-                    Paramecium
-                  </div>
-                  <div>
-                    <span
-                      className="dot"
-                      style={{ background: "#ef4444" }}
-                    ></span>
-                    Didinium
-                  </div>
+                  <div><span className="dot" style={{ background: "#ca8a04" }}></span>Nutrient</div>
+                  <div><span className="dot" style={{ background: "#16a34a" }}></span>Algae</div>
+                  <div><span className="dot" style={{ background: "#ef4444" }}></span>Daphnia</div>
                 </div>
 
                 <div className="small" style={{ marginTop: 8 }}>
                   <div>
-                    Time:{" "}
-                    <strong>
-                      {tRef.current.toFixed(2)} / {SIM_DURATION} days
-                    </strong>{" "}
-                    {!running && tRef.current >= SIM_DURATION
-                      ? " (finished)"
-                      : ""}
+                    Time: <strong>{tRef.current.toFixed(2)} / {SIM_DURATION} days</strong>
+                    {!running && tRef.current >= SIM_DURATION ? " (finished)" : ""}
                   </div>
+                  <div>Time left: <strong>{timeLeft} days</strong></div>
                   <div>
-                    Time left: <strong>{timeLeft} days</strong>
-                  </div>
-                  <div>
-                    Counts — Bacteria:{" "}
-                    <strong>{Math.round(B).toLocaleString()}</strong>,
-                    Paramecium: <strong>{Math.round(P)}</strong>, Didinium:{" "}
-                    <strong>{Math.round(D)}</strong>
+                    Counts — Nutrient: <strong>{Math.round(N).toLocaleString()}</strong>, Algae: <strong>{Math.round(A)}</strong>, Daphnia: <strong>{Math.round(D)}</strong>
                   </div>
                 </div>
               </div>
@@ -658,228 +508,69 @@
 
                 <div style={{ marginBottom: 10 }}>
                   <div className="small" style={{ marginBottom: 6 }}>
-                    Nutrient fraction (0 → 1). Quick:{" "}
-                    <button
-                      className="quick-btn"
-                      onClick={() => setFractionQuick(1)}
-                    >
-                      Full
-                    </button>{" "}
-                    <button
-                      className="quick-btn"
-                      onClick={() => setFractionQuick(0.5)}
-                    >
-                      1/2
-                    </button>{" "}
-                    <button
-                      className="quick-btn"
-                      onClick={() => setFractionQuick(1 / 3)}
-                    >
-                      1/3
-                    </button>{" "}
-                    <button
-                      className="quick-btn"
-                      onClick={() => setFractionQuick(0)}
-                    >
-                      0
-                    </button>
+                    Nutrient fraction (0 → 1). Quick: {" "}
+                    <button className="quick-btn" onClick={() => setFrac(1)}>Full</button>{" "}
+                    <button className="quick-btn" onClick={() => setFrac(0.5)}>1/2</button>{" "}
+                    <button className="quick-btn" onClick={() => setFrac(1 / 3)}>1/3</button>{" "}
+                    <button className="quick-btn" onClick={() => setFrac(0)}>0</button>
                   </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={frac}
-                    onChange={(e) => setFrac(+e.target.value)}
-                  />
+                  <input type="range" min={0} max={1} step={0.01} value={frac} onChange={(e) => setFrac(+e.target.value)} />
                   <div style={{ marginTop: 6 }} className="small">
-                    Fraction: <span className="num">{frac.toFixed(2)}</span> →
-                    conc ={" "}
-                    <span className="num">
-                      {(FULL_CONC * frac).toExponential(2)}
-                    </span>{" "}
-                    cells/mL → initB ={" "}
-                    <span className="num">
-                      {Math.round(
-                        FULL_CONC * frac * VOLUME_ML
-                      ).toLocaleString()}
-                    </span>{" "}
-                    cells
+                    Fraction: <span className="num">{frac.toFixed(2)}</span> → conc = <span className="num">{(FULL_N * frac).toExponential(2)}</span> units/mL → initN = <span className="num">{Math.round(FULL_N * frac * VOLUME_ML).toLocaleString()}</span> units
                   </div>
                 </div>
 
                 <div style={{ marginBottom: 10 }}>
                   <div className="small" style={{ marginBottom: 6 }}>
-                    Didinium (predators) — 0 to 10
+                    Daphnia (top predator) — 0 to 10
                   </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={10}
-                    step={1}
-                    value={D}
-                    onChange={(e) => setD(+e.target.value)}
-                  />
+                  <input type="range" min={0} max={10} step={1} value={D} onChange={(e) => setD(+e.target.value)} />
                   <div className="small">
-                    Didinium: <strong>{Math.round(D)}</strong>
+                    Daphnia: <strong>{Math.round(D)}</strong>
                   </div>
                   <div className="small" style={{ marginTop: 6 }}>
-                    Increase this before pressing Start to test top-down
-                    control; Reset sets Didinium back to 2.
+                    Increase this before pressing Start to test top-down control; Reset sets Daphnia back to 2.
                   </div>
                 </div>
 
                 <div style={{ marginBottom: 10 }}>
                   <label>
-                    <input
-                      type="checkbox"
-                      checked={seedPresent}
-                      onChange={(e) => setSeedPresent(e.target.checked)}
-                    />{" "}
-                    Wheat seed present
+                    <input type="checkbox" checked={pulsePresent} onChange={(e) => setPulsePresent(e.target.checked)} /> {" "}
+                    Nutrient enrichment present
                   </label>
                 </div>
 
                 <hr />
 
+                <div className="small" style={{ marginTop: 6 }}>
+                  Week 1 checkpoint: compare the counts at day 7 before continuing to day 14.
+                </div>
+
                 <div id="instructor-panel">
                   <fieldset disabled>
-                    <h4 style={{ margin: "8px 0" }}>
-                      Instructor knobs (locked)
-                    </h4>
-
-                    <div className="small">
-                      Integration step dt: <strong>{dt.toFixed(3)}</strong>
-                    </div>
-                    <input
-                      disabled
-                      type="range"
-                      min={0.002}
-                      max={0.02}
-                      step={0.001}
-                      value={dt}
-                      onChange={(e) => setDt(+e.target.value)}
-                    />
-
-                    <div className="small" style={{ marginTop: 8 }}>
-                      Bacteria growth r: <strong>{r.toFixed(2)}</strong>
-                    </div>
-                    <input
-                      disabled
-                      type="range"
-                      min={0.5}
-                      max={4}
-                      step={0.05}
-                      value={r}
-                      onChange={(e) => setR(+e.target.value)}
-                    />
-
-                    <div className="small" style={{ marginTop: 8 }}>
-                      B→P encounter cBP: <strong>{cBP.toFixed(3)}</strong>
-                    </div>
-                    <input
-                      disabled
-                      type="range"
-                      min={0.002}
-                      max={0.05}
-                      step={0.001}
-                      value={cBP}
-                      onChange={(e) => setCBP(+e.target.value)}
-                    />
-
-                    <div className="small" style={{ marginTop: 8 }}>
-                      B→P handling tauBP (days):{" "}
-                      <strong>{tauBP.toFixed(3)}</strong>
-                    </div>
-                    <input
-                      disabled
-                      type="range"
-                      min={0.01}
-                      max={0.2}
-                      step={0.01}
-                      value={tauBP}
-                      onChange={(e) => setTauBP(+e.target.value)}
-                    />
-
-                    <div className="small" style={{ marginTop: 8 }}>
-                      B→P conversion eBP: <strong>{eBP.toFixed(2)}</strong>
-                    </div>
-                    <input
-                      disabled
-                      type="range"
-                      min={0.05}
-                      max={0.5}
-                      step={0.01}
-                      value={eBP}
-                      onChange={(e) => setEBP(+e.target.value)}
-                    />
-
-                    <div className="small" style={{ marginTop: 8 }}>
-                      P mortality mP: <strong>{mP.toFixed(3)}</strong>
-                    </div>
-                    <input
-                      disabled
-                      type="range"
-                      min={0.005}
-                      max={0.2}
-                      step={0.005}
-                      value={mP}
-                      onChange={(e) => setMP(+e.target.value)}
-                    />
-
-                    <div className="small" style={{ marginTop: 8 }}>
-                      P→D encounter cPD: <strong>{cPD.toFixed(3)}</strong>
-                    </div>
-                    <input
-                      disabled
-                      type="range"
-                      min={0.005}
-                      max={0.06}
-                      step={0.001}
-                      value={cPD}
-                      onChange={(e) => setCPD(+e.target.value)}
-                    />
-
-                    <div className="small" style={{ marginTop: 8 }}>
-                      Predator handling h (days):{" "}
-                      <strong>{h.toFixed(3)}</strong>
-                    </div>
-                    <input
-                      disabled
-                      type="range"
-                      min={0.02}
-                      max={0.4}
-                      step={0.01}
-                      value={h}
-                      onChange={(e) => setH(+e.target.value)}
-                    />
-
-                    <div className="small" style={{ marginTop: 8 }}>
-                      P→D conversion ePD: <strong>{ePD.toFixed(2)}</strong>
-                    </div>
-                    <input
-                      disabled
-                      type="range"
-                      min={0.05}
-                      max={0.6}
-                      step={0.01}
-                      value={ePD}
-                      onChange={(e) => setEPD(+e.target.value)}
-                    />
-
-                    <div className="small" style={{ marginTop: 8 }}>
-                      Predator efficiency ×:{" "}
-                      <strong>{predEff.toFixed(2)}</strong>
-                    </div>
-                    <input
-                      disabled
-                      type="range"
-                      min={0.2}
-                      max={2.0}
-                      step={0.05}
-                      value={predEff}
-                      onChange={(e) => setPredEff(+e.target.value)}
-                    />
+                    <h4 style={{ margin: "8px 0" }}>Instructor knobs (locked)</h4>
+                    <div className="small">Integration step dt: <strong>{dt.toFixed(3)}</strong></div>
+                    <input disabled type="range" min={0.002} max={0.02} step={0.001} value={dt} onChange={(e) => setDt(+e.target.value)} />
+                    <div className="small" style={{ marginTop: 8 }}>Algae growth rA: <strong>{rA.toFixed(2)}</strong></div>
+                    <input disabled type="range" min={0.5} max={3} step={0.05} value={rA} onChange={(e) => setRA(+e.target.value)} />
+                    <div className="small" style={{ marginTop: 8 }}>Nutrient half-saturation kN: <strong>{kN.toFixed(0)}</strong></div>
+                    <input disabled type="range" min={50} max={1000} step={10} value={kN} onChange={(e) => setKN(+e.target.value)} />
+                    <div className="small" style={{ marginTop: 8 }}>N→A encounter cNA: <strong>{cNA.toFixed(3)}</strong></div>
+                    <input disabled type="range" min={0.002} max={0.05} step={0.001} value={cNA} onChange={(e) => setCNA(+e.target.value)} />
+                    <div className="small" style={{ marginTop: 8 }}>N→A handling tauNA (days): <strong>{tauNA.toFixed(3)}</strong></div>
+                    <input disabled type="range" min={0.005} max={0.1} step={0.005} value={tauNA} onChange={(e) => setTauNA(+e.target.value)} />
+                    <div className="small" style={{ marginTop: 8 }}>N→A conversion eNA: <strong>{eNA.toFixed(2)}</strong></div>
+                    <input disabled type="range" min={0.1} max={0.8} step={0.01} value={eNA} onChange={(e) => setENA(+e.target.value)} />
+                    <div className="small" style={{ marginTop: 8 }}>A→D encounter cAD: <strong>{cAD.toFixed(3)}</strong></div>
+                    <input disabled type="range" min={0.002} max={0.06} step={0.001} value={cAD} onChange={(e) => setCAD(+e.target.value)} />
+                    <div className="small" style={{ marginTop: 8 }}>Predator handling h (days): <strong>{h.toFixed(3)}</strong></div>
+                    <input disabled type="range" min={0.01} max={0.2} step={0.005} value={h} onChange={(e) => setH(+e.target.value)} />
+                    <div className="small" style={{ marginTop: 8 }}>A→D conversion eAD: <strong>{eAD.toFixed(2)}</strong></div>
+                    <input disabled type="range" min={0.05} max={0.6} step={0.01} value={eAD} onChange={(e) => setEAD(+e.target.value)} />
+                    <div className="small" style={{ marginTop: 8 }}>Algae mortality mA: <strong>{mA.toFixed(3)}</strong></div>
+                    <input disabled type="range" min={0.005} max={0.1} step={0.005} value={mA} onChange={(e) => setMA(+e.target.value)} />
+                    <div className="small" style={{ marginTop: 8 }}>Daphnia mortality mD: <strong>{mD.toFixed(3)}</strong></div>
+                    <input disabled type="range" min={0.005} max={0.08} step={0.005} value={mD} onChange={(e) => setMD(+e.target.value)} />
                   </fieldset>
                 </div>
               </div>
@@ -887,31 +578,22 @@
 
             <div style={{ marginTop: 12 }} className="card">
               <h4 style={{ marginTop: 0 }}>Time-series</h4>
-              <div
-                style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}
-              >
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
                 <div>
-                  <div className="small" style={{ marginBottom: 6 }}>
-                    Paramecium (green)
-                  </div>
-                  <canvas
-                    ref={plotPRef}
-                    style={{ width: "100%", height: 200 }}
-                  />
+                  <div className="small" style={{ marginBottom: 6 }}>Nutrient (gold)</div>
+                  <canvas ref={plotNRef} style={{ width: "100%", height: 200 }} />
                 </div>
                 <div>
-                  <div className="small" style={{ marginBottom: 6 }}>
-                    Didinium (red)
-                  </div>
-                  <canvas
-                    ref={plotDRef}
-                    style={{ width: "100%", height: 200 }}
-                  />
+                  <div className="small" style={{ marginBottom: 6 }}>Algae (green)</div>
+                  <canvas ref={plotARef} style={{ width: "100%", height: 200 }} />
+                </div>
+                <div>
+                  <div className="small" style={{ marginBottom: 6 }}>Daphnia (red)</div>
+                  <canvas ref={plotDRef} style={{ width: "100%", height: 200 }} />
                 </div>
               </div>
               <div className="small" style={{ marginTop: 8 }}>
-                Each plot autos-scales for that species so small/large counts
-                are visible.
+                Each plot autos-scales for that species so small and large counts stay visible.
               </div>
             </div>
           </div>
@@ -919,7 +601,7 @@
       }
 
       const root = ReactDOM.createRoot(document.getElementById("root"));
-      root.render(<TrophicCascadeRK4 />);
+      root.render(<NutrientAlgaeDaphniaModel />);
     </script>
   </body>
 </html>
