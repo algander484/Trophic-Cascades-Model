@@ -1,4 +1,3 @@
-<h1NEWVERSION</h1>
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -109,7 +108,7 @@
         const CHECKPOINT_DAY = 7.0; // one-week checkpoint
         const VOLUME_ML = 6.0;
         const FULL_N = 1000;
-        const INITIAL_A = 28;
+        const INITIAL_A = 45000000; // 7.5 x 10^6 per mL in a 6 mL vessel
         const INITIAL_D = 2;
 
         const [frac, setFrac] = useState(1.0);
@@ -118,25 +117,25 @@
         const [A, setA] = useState(INITIAL_A);
         const [D, setD] = useState(INITIAL_D);
         const [pulsePresent, setPulsePresent] = useState(true);
-        const nutrientPulse = 10; // nutrient units / mL / day
+        const nutrientPulse = 10; // nutrient units / mL / day when pulse is on
         const speed = 8;
         const noise = 0;
         const [running, setRunning] = useState(false);
 
         const [dt, setDt] = useState(0.005);
-        const [rA, setRA] = useState(1.25);
-        const [kN, setKN] = useState(260);
-        const [cNA, setCNA] = useState(0.018);
-        const [tauNA, setTauNA] = useState(0.02);
-        const [eNA, setENA] = useState(0.55);
-        const [cAD, setCAD] = useState(0.022);
-        const [h, setH] = useState(0.06);
-        const [eAD, setEAD] = useState(0.34);
-        const [mA, setMA] = useState(0.04);
-        const [mD, setMD] = useState(0.03);
-        const [recycleA, setRecycleA] = useState(0.25);
-        const [recycleD, setRecycleD] = useState(0.15);
-        const [recycleG, setRecycleG] = useState(0.12);
+        const [rA, setRA] = useState(1.8); // algae intrinsic growth / day
+        const [kN, setKN] = useState(260); // nutrient half-saturation
+        const [cNA, setCNA] = useState(0.018); // nutrient uptake encounter rate
+        const [tauNA, setTauNA] = useState(0.02); // nutrient uptake handling time
+        const [eNA, setENA] = useState(0.55); // nutrient -> algae conversion
+        const [cAD, setCAD] = useState(0.005); // algae -> daphnia encounter rate
+        const [h, setH] = useState(0.06); // predator handling time
+        const [eAD, setEAD] = useState(0.34); // algae -> daphnia conversion
+        const [mA, setMA] = useState(0.02); // algae mortality / day
+        const [mD, setMD] = useState(0.03); // daphnia mortality / day
+        const [recycleA, setRecycleA] = useState(0.25); // algae mortality recycled to nutrients
+        const [recycleD, setRecycleD] = useState(0.15); // daphnia mortality recycled to nutrients
+        const [recycleG, setRecycleG] = useState(0.12); // grazing losses recycled to nutrients
 
         const canvasRef = useRef(null);
         const plotNRef = useRef(null);
@@ -193,7 +192,7 @@
             ctx.fillRect(p.x, p.y, 1.4, 1.4);
           }
 
-          const aDots = Math.min(260, Math.round(aCount));
+          const aDots = Math.min(260, Math.round(aCount / 200000));
           for (let i = 0; i < aDots; i++) {
             const p = rp();
             ctx.save();
@@ -201,7 +200,7 @@
             ctx.rotate(((Math.random() - 0.5) * Math.PI) / 2);
             ctx.beginPath();
             ctx.ellipse(0, 0, 6, 3, 0, 0, Math.PI * 2);
-            ctx.fillStyle = "#16a34a";
+            ctx.fillStyle = "#22c55e";
             ctx.fill();
             ctx.restore();
           }
@@ -211,11 +210,29 @@
             const p = rp();
             ctx.save();
             ctx.translate(p.x, p.y);
-            ctx.rotate(((Math.random() - 0.5) * Math.PI) / 8);
+            ctx.rotate(((Math.random() - 0.5) * Math.PI) / 6);
+
+            // body
             ctx.beginPath();
-            ctx.ellipse(0, 0, 7, 4, 0, 0, Math.PI * 2);
-            ctx.fillStyle = "#ef4444";
+            ctx.ellipse(0, 0, 8, 5, 0, 0, Math.PI * 2);
+            ctx.fillStyle = "#dc2626";
             ctx.fill();
+
+            // eye
+            ctx.beginPath();
+            ctx.arc(3, -1, 1.2, 0, Math.PI * 2);
+            ctx.fillStyle = "#000";
+            ctx.fill();
+
+            // tail spine
+            ctx.beginPath();
+            ctx.moveTo(-6, 0);
+            ctx.lineTo(-10, -2);
+            ctx.lineTo(-9, 1);
+            ctx.closePath();
+            ctx.fillStyle = "#dc2626";
+            ctx.fill();
+
             ctx.restore();
           }
 
@@ -223,16 +240,12 @@
           ctx.font = "15px system-ui";
           ctx.fillText("Time: " + tRef.current.toFixed(2) + " days", 16, 28);
           ctx.fillText("Nutrient: " + Math.round(nCount).toLocaleString(), 16, 50);
-          ctx.fillText("Algae: " + Math.round(aCount), 16, 72);
+          ctx.fillText("Algae: " + Math.round(aCount).toLocaleString(), 16, 72);
           ctx.fillText("Daphnia: " + Math.round(dCount), 16, 94);
           ctx.fillStyle = "#92400e";
           ctx.fillText("Nutrient pulse: " + (pulsePresent ? "present" : "off"), 16, 118);
           ctx.fillStyle = "#065f46";
-          ctx.fillText(
-            "Algae model",
-            16,
-            140
-          );
+          ctx.fillText("Algae model", 16, 140);
         }
 
         function derivatives(state) {
@@ -470,7 +483,7 @@
             <h2>Nutrient → Algae → Daphnia Model</h2>
             <p className="small">
               Students change nutrient fraction and starting daphnia. The model runs for 14 days, and the day-7 checkpoint is highlighted in the plots.
-              This version uses algae and keeps the parameters as starting estimates for class tuning.
+              This version starts algae at 7.5 × 10^6 per mL (45,000,000 total in a 6 mL vessel) and uses gentler grazing so algae can grow under full nutrients.
             </p>
 
             <div className="row">
@@ -499,7 +512,7 @@
                   </div>
                   <div>Time left: <strong>{timeLeft} days</strong></div>
                   <div>
-                    Counts — Nutrient: <strong>{Math.round(N).toLocaleString()}</strong>, Algae: <strong>{Math.round(A)}</strong>, Daphnia: <strong>{Math.round(D)}</strong>
+                    Counts — Nutrient: <strong>{Math.round(N).toLocaleString()}</strong>, Algae: <strong>{Math.round(A).toLocaleString()}</strong>, Daphnia: <strong>{Math.round(D)}</strong>
                   </div>
                 </div>
               </div>
