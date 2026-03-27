@@ -1,175 +1,774 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Nutrient–Algae–Daphnia Model</title>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1"
+    />
+    <title>Algae–Daphnia Trophic Cascade Model</title>
 
-<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, Roboto, "Helvetica Neue",
+          Arial, sans-serif;
+        background: #f1f5f9;
+        margin: 14px;
+        color: #0f172a;
+      }
 
-<style>
-body { font-family: Arial, sans-serif; background:#f1f5f9; margin:20px; color:#0f172a; }
-canvas { border:1px solid #ccc; margin-top:10px; background:#fff; }
-button { margin-right: 8px; margin-top: 10px; padding: 8px 12px; }
-.small { color:#475569; font-size: 13px; }
-</style>
-</head>
+      .container {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
 
-<body>
-<div id="root"></div>
+      .card {
+        background: #fff;
+        padding: 14px;
+        border-radius: 12px;
+        box-shadow: 0 1px 8px rgba(2, 6, 23, 0.07);
+      }
 
-<script type="text/babel">
-const { useState, useRef, useEffect } = React;
+      .row {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
 
-function Model() {
-  const SIM_DURATION = 14;
+      .col {
+        flex: 1;
+        min-width: 320px;
+      }
 
-  const [N, setN] = useState(6000);
-  const [A, setA] = useState(45000000);
-  const [D, setD] = useState(2);
-  const [running, setRunning] = useState(false);
+      canvas {
+        width: 100%;
+        height: auto;
+        display: block;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+        background: #fff;
+      }
 
-  const tRef = useRef(0);
-  const canvasRef = useRef(null);
+      input[type="range"] {
+        width: 100%;
+      }
 
-  function draw() {
-    const c = canvasRef.current;
-    if (!c) return;
-    const ctx = c.getContext("2d");
+      label {
+        cursor: pointer;
+      }
 
-    c.width = 800;
-    c.height = 500;
+      button {
+        padding: 7px 11px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+      }
 
-    ctx.clearRect(0, 0, 800, 500);
+      .legend {
+        display: flex;
+        gap: 14px;
+        margin-top: 10px;
+        font-size: 13px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
 
-    const cx = 400;
-    const cy = 260;
-    const R = 200;
+      .dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 6px;
+        vertical-align: middle;
+      }
 
-    ctx.beginPath();
-    ctx.arc(cx, cy, R, 0, Math.PI * 2);
-    ctx.fillStyle = "#ffffff";
-    ctx.fill();
-    ctx.strokeStyle = "#94a3b8";
-    ctx.lineWidth = 4;
-    ctx.stroke();
+      .small {
+        font-size: 13px;
+        color: #374151;
+      }
 
-    function randPoint() {
-      const r = Math.sqrt(Math.random()) * (R - 10);
-      const t = Math.random() * Math.PI * 2;
-      return { x: cx + r * Math.cos(t), y: cy + r * Math.sin(t) };
-    }
+      .control-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 8px;
+        flex-wrap: wrap;
+      }
 
-    for (let i = 0; i < 180; i++) {
-      const p = randPoint();
-      ctx.fillStyle = "rgba(234,179,8,0.25)";
-      ctx.fillRect(p.x, p.y, 1.5, 1.5);
-    }
+      .num {
+        font-weight: 700;
+        margin-left: 4px;
+      }
 
-    const algaeDots = Math.min(220, Math.round(A / 300000));
-    for (let i = 0; i < algaeDots; i++) {
-      const p = randPoint();
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y, 5, 3, 0, 0, Math.PI * 2);
-      ctx.fillStyle = "#22c55e";
-      ctx.fill();
-    }
+      .quick-btn {
+        background: #e2e8f0;
+        border-radius: 7px;
+        padding: 4px 9px;
+        cursor: pointer;
+      }
 
-    const daphniaDots = Math.min(80, Math.max(0, Math.round(D * 4)));
-    for (let i = 0; i < daphniaDots; i++) {
-      const p = randPoint();
+      .section-title {
+        margin: 0 0 10px 0;
+      }
 
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y, 7, 4, 0, 0, Math.PI * 2);
-      ctx.fillStyle = "#f97316";
-      ctx.fill();
+      .note {
+        margin-top: 8px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+      }
+    </style>
 
-      ctx.beginPath();
-      ctx.arc(p.x + 2, p.y - 1, 1.2, 0, Math.PI * 2);
-      ctx.fillStyle = "#000";
-      ctx.fill();
-    }
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.development.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"
+    ></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
 
-    ctx.fillStyle = "#0f172a";
-    ctx.font = "16px system-ui";
-    ctx.fillText("Time: " + tRef.current.toFixed(2), 20, 20);
-    ctx.fillText("Nutrient: " + Math.round(N), 20, 40);
-    ctx.fillText("Algae: " + Math.round(A).toLocaleString(), 20, 60);
-    ctx.fillText("Daphnia: " + D.toFixed(2), 20, 80);
-  }
+  <body>
+    <div id="root"></div>
 
-  function step() {
-    const dt = 0.01;
+    <script type="text/babel">
+      const { useEffect, useRef, useState } = React;
 
-    let n = N;
-    let a = A;
-    let d = D;
+      function AlgaeDaphniaModel() {
+        // Core experiment setup
+        const SIM_DURATION = 14.0; // days
+        const CHECK_DAY = 7.0; // one-week student check
+        const VOLUME_ML = 50.0; // total culture jar volume
+        const INITIAL_ALGAE_CONC = 7.5e6; // 75 x 10^5 cells/mL
+        const INITIAL_ALGAE_TOTAL = INITIAL_ALGAE_CONC * VOLUME_ML;
 
-    const growth = 1.6 * (n / (300 + n)) * a;
-    const grazing = (0.003 * a) / (1 + 0.003 * 0.08 * a) * d;
+        // Simulation timestep
+        const dt = 0.003; // days
+        const stepsPerFrame = 8;
 
-    const dN = -0.00000002 * n * a + 0.15 * a + 0.05 * d + 8;
-    const dA = growth - grazing - 0.02 * a;
-    const dD = 0.25 * grazing - 0.02 * d;
+        // Starting values
+        const DEFAULT_DAPHNIA = 4;
 
-    n += dN * dt;
-    a += dA * dt;
-    d += dD * dt;
+        // "Nutrient" is modeled as an availability index from 0 to ~1.5
+        const [nutrientFrac, setNutrientFrac] = useState(1.0);
+        const [nutrient, setNutrient] = useState(1.0);
+        const [algaeConc, setAlgaeConc] = useState(INITIAL_ALGAE_CONC);
+        const [daphnia, setDaphnia] = useState(DEFAULT_DAPHNIA);
+        const [timeDays, setTimeDays] = useState(0);
+        const [running, setRunning] = useState(false);
+        const [history, setHistory] = useState([]);
 
-    n = Math.max(0, n);
-    a = Math.max(0, a);
-    d = Math.max(0, d);
+        const dishRef = useRef(null);
+        const algaePlotRef = useRef(null);
+        const daphniaPlotRef = useRef(null);
+        const rafRef = useRef(null);
 
-    setN(n);
-    setA(a);
-    setD(d);
+        const simRef = useRef({
+          t: 0,
+          nutrient: 1.0,
+          algae: INITIAL_ALGAE_CONC,
+          daphnia: DEFAULT_DAPHNIA,
+          lastHistoryT: 0,
+        });
 
-    tRef.current += dt;
-    draw();
+        // Reasonable starter parameters for a teaching model.
+        // These are intentionally simple and tunable.
+        const params = {
+          muMax: 0.75, // /day, max algal specific growth rate
+          kN: 0.20, // nutrient half-saturation (availability units)
+          mA: 0.06, // /day, algae mortality
+          KBase: 1.6e7, // cells/mL, baseline crowding limit
+          KBoost: 3.2e7, // cells/mL, nutrient-dependent crowding boost
 
-    if (tRef.current < SIM_DURATION) {
-      requestAnimationFrame(step);
-    } else {
-      setRunning(false);
-    }
-  }
+          gMax: 120000, // cells per daphnia per day, max grazing
+          hA: 3.5e6, // cells/mL, half-saturation for grazing
+          eD: 5.0e-6, // daphnia produced per algal cell consumed
+          mD: 0.18, // /day, daphnia mortality
 
-  function start() {
-    if (!running) {
-      setRunning(true);
-      step();
-    }
-  }
+          nutrientUse: 0.18, // converts algal growth into nutrient drawdown
+          nutrientRecycleAlgae: 0.06,
+          nutrientRecycleGrazing: 0.03,
+          nutrientRecycleDaphnia: 0.01,
+        };
 
-  function reset() {
-    tRef.current = 0;
-    setN(6000);
-    setA(45000000);
-    setD(2);
-    setRunning(false);
-    draw();
-  }
+        function clamp(v, lo, hi) {
+          return Math.max(lo, Math.min(hi, v));
+        }
 
-  useEffect(() => {
-    draw();
-  }, []);
+        function resetSimulation(nextNutrientFrac = nutrientFrac) {
+          const nextState = {
+            t: 0,
+            nutrient: nextNutrientFrac,
+            algae: INITIAL_ALGAE_CONC,
+            daphnia: DEFAULT_DAPHNIA,
+            lastHistoryT: 0,
+          };
+          simRef.current = nextState;
+          setTimeDays(0);
+          setNutrient(nextNutrientFrac);
+          setAlgaeConc(INITIAL_ALGAE_CONC);
+          setDaphnia(DEFAULT_DAPHNIA);
+          setHistory([{ t: 0, nutrient: nextNutrientFrac, algae: INITIAL_ALGAE_CONC, daphnia: DEFAULT_DAPHNIA }]);
+          setRunning(false);
+        }
 
-  return (
-    <div>
-      <h2>Nutrient → Algae → Daphnia</h2>
-      <p className="small">Two-week run with green algae and orange daphnia.</p>
-      <canvas ref={canvasRef}></canvas>
-      <br />
-      <button onClick={start}>Start</button>
-      <button onClick={reset}>Reset</button>
-    </div>
-  );
-}
+        // Reset whenever the user changes the starting nutrient fraction.
+        useEffect(() => {
+          resetSimulation(nutrientFrac);
+          // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [nutrientFrac]);
 
-ReactDOM.createRoot(document.getElementById("root")).render(<Model />);
-</script>
+        function derivatives(state) {
+          const n = Math.max(0, state.nutrient);
+          const a = Math.max(0, state.algae); // cells/mL
+          const d = Math.max(0, state.daphnia);
 
-</body>
+          const nutrientEffect = n / (params.kN + n);
+          const carryingCapacity = params.KBase + params.KBoost * nutrientEffect;
+
+          // Algal growth: nutrient-limited + crowding limited
+          const algalGrowth =
+            params.muMax *
+            nutrientEffect *
+            a *
+            Math.max(0, 1 - a / carryingCapacity);
+
+          // Holling type II grazing
+          const grazingPerDaphnia = (params.gMax * a) / (params.hA + a);
+          const totalGrazing = grazingPerDaphnia * d; // cells/day
+          const grazingLossPerMl = totalGrazing / VOLUME_ML; // cells/mL/day
+
+          // Nutrient drawdown and recycling
+          const nutrientDrawdown =
+            params.nutrientUse * (algalGrowth / INITIAL_ALGAE_CONC);
+
+          const nutrientReturn =
+            params.nutrientRecycleAlgae * (params.mA * a) / INITIAL_ALGAE_CONC +
+            params.nutrientRecycleGrazing * grazingLossPerMl / INITIAL_ALGAE_CONC +
+            params.nutrientRecycleDaphnia * (params.mD * d) / VOLUME_ML;
+
+          // State derivatives
+          const dN = nutrientReturn - nutrientDrawdown;
+          const dA = algalGrowth - grazingLossPerMl - params.mA * a;
+          const dD = params.eD * totalGrazing - params.mD * d;
+
+          return [dN, dA, dD];
+        }
+
+        function rk4Step(state, dtDays) {
+          const [k1N, k1A, k1D] = derivatives(state);
+
+          const s2 = {
+            nutrient: state.nutrient + 0.5 * dtDays * k1N,
+            algae: state.algae + 0.5 * dtDays * k1A,
+            daphnia: state.daphnia + 0.5 * dtDays * k1D,
+          };
+          const [k2N, k2A, k2D] = derivatives(s2);
+
+          const s3 = {
+            nutrient: state.nutrient + 0.5 * dtDays * k2N,
+            algae: state.algae + 0.5 * dtDays * k2A,
+            daphnia: state.daphnia + 0.5 * dtDays * k2D,
+          };
+          const [k3N, k3A, k3D] = derivatives(s3);
+
+          const s4 = {
+            nutrient: state.nutrient + dtDays * k3N,
+            algae: state.algae + dtDays * k3A,
+            daphnia: state.daphnia + dtDays * k3D,
+          };
+          const [k4N, k4A, k4D] = derivatives(s4);
+
+          const next = {
+            t: state.t + dtDays,
+            nutrient:
+              state.nutrient +
+              (dtDays / 6) * (k1N + 2 * k2N + 2 * k3N + k4N),
+            algae:
+              state.algae +
+              (dtDays / 6) * (k1A + 2 * k2A + 2 * k3A + k4A),
+            daphnia:
+              state.daphnia +
+              (dtDays / 6) * (k1D + 2 * k2D + 2 * k3D + k4D),
+            lastHistoryT: state.lastHistoryT,
+          };
+
+          next.nutrient = clamp(next.nutrient, 0, 1.5);
+          next.algae = Math.max(0, next.algae);
+          next.daphnia = Math.max(0, next.daphnia);
+
+          return next;
+        }
+
+        function advanceSimulation() {
+          let cur = { ...simRef.current };
+          const points = [];
+          let lastRecorded = cur.lastHistoryT;
+
+          for (let i = 0; i < stepsPerFrame; i++) {
+            cur = rk4Step(cur, dt);
+
+            if (
+              cur.t - lastRecorded >= 0.05 ||
+              cur.t >= SIM_DURATION
+            ) {
+              points.push({
+                t: cur.t,
+                nutrient: cur.nutrient,
+                algae: cur.algae,
+                daphnia: cur.daphnia,
+              });
+              lastRecorded = cur.t;
+            }
+
+            if (cur.t >= SIM_DURATION) {
+              break;
+            }
+          }
+
+          cur.lastHistoryT = lastRecorded;
+          simRef.current = cur;
+
+          setTimeDays(cur.t);
+          setNutrient(cur.nutrient);
+          setAlgaeConc(cur.algae);
+          setDaphnia(cur.daphnia);
+
+          if (points.length) {
+            setHistory((prev) => {
+              const next = [...prev, ...points];
+              return next.slice(-3000);
+            });
+          }
+
+          if (cur.t >= SIM_DURATION) {
+            setRunning(false);
+          }
+        }
+
+        useEffect(() => {
+          if (!running) {
+            if (rafRef.current) {
+              cancelAnimationFrame(rafRef.current);
+            }
+            return;
+          }
+
+          function loop() {
+            advanceSimulation();
+            rafRef.current = requestAnimationFrame(loop);
+          }
+
+          rafRef.current = requestAnimationFrame(loop);
+
+          return () => {
+            if (rafRef.current) {
+              cancelAnimationFrame(rafRef.current);
+            }
+          };
+          // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [running]);
+
+        function drawDish() {
+          const canvas = dishRef.current;
+          if (!canvas) return;
+
+          canvas.width = 980;
+          canvas.height = 620;
+          const ctx = canvas.getContext("2d");
+
+          const w = canvas.width;
+          const h = canvas.height;
+          const cx = w / 2;
+          const cy = h / 2;
+          const R = Math.min(w, h) / 2 - 40;
+
+          ctx.clearRect(0, 0, w, h);
+
+          // Dish
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.arc(cx, cy, R, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = "#94a3b8";
+          ctx.lineWidth = 6;
+          ctx.stroke();
+
+          function randomPointInDish() {
+            const r = Math.sqrt(Math.random()) * (R - 10);
+            const theta = Math.random() * Math.PI * 2;
+            return {
+              x: cx + r * Math.cos(theta),
+              y: cy + r * Math.sin(theta),
+            };
+          }
+
+          // Algae dots: small green points
+          const algaeDots = clamp(
+            Math.round((algaeConc / INITIAL_ALGAE_CONC) * 500),
+            50,
+            1000
+          );
+
+          for (let i = 0; i < algaeDots; i++) {
+            const p = randomPointInDish();
+            ctx.fillStyle = "rgba(34,197,94,0.55)";
+            ctx.fillRect(p.x, p.y, 1.4, 1.4);
+          }
+
+          // Daphnia: orange circles
+          const daphniaDots = clamp(Math.round(daphnia), 0, 140);
+          for (let i = 0; i < daphniaDots; i++) {
+            const p = randomPointInDish();
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(((Math.random() - 0.5) * Math.PI) / 5);
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 7.5, 5.0, 0, 0, Math.PI * 2);
+            ctx.fillStyle = "#f97316";
+            ctx.fill();
+            ctx.restore();
+          }
+
+          // Labels
+          ctx.fillStyle = "#0f172a";
+          ctx.font = "16px system-ui, -apple-system, sans-serif";
+          ctx.fillText(`Time: ${timeDays.toFixed(2)} days`, 18, 28);
+          ctx.fillText(
+            `Nutrient availability: ${nutrient.toFixed(2)} / 1.50`,
+            18,
+            52
+          );
+          ctx.fillText(
+            `Algae: ${Math.round(algaeConc).toLocaleString()} cells/mL`,
+            18,
+            76
+          );
+          ctx.fillText(
+            `Total algae in 50 mL jar: ${Math.round(
+              algaeConc * VOLUME_ML
+            ).toLocaleString()} cells`,
+            18,
+            100
+          );
+          ctx.fillText(
+            `Daphnia: ${Math.round(daphnia)}`,
+            18,
+            124
+          );
+          ctx.fillStyle = "#0369a1";
+          ctx.fillText(
+            `Week 1 check at day ${CHECK_DAY.toFixed(0)} (plots marked below)`,
+            18,
+            152
+          );
+        }
+
+        function drawPlot(canvasRef, hist, options) {
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+
+          canvas.width = 980;
+          canvas.height = 240;
+          const ctx = canvas.getContext("2d");
+
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          const margin = { l: 72, r: 22, t: 14, b: 42 };
+          const W = canvas.width - margin.l - margin.r;
+          const H = canvas.height - margin.t - margin.b;
+
+          const valueFn = options.valueFn;
+          const values = hist.length ? hist.map(valueFn) : [0];
+          const vmax = Math.max(...values, 1);
+          const Ymax = vmax * 1.15;
+
+          const sx = (t) =>
+            margin.l + ((t - 0) / (SIM_DURATION - 0)) * W;
+          const sy = (v) =>
+            margin.t + (1 - v / Ymax) * H;
+
+          // Background grid
+          ctx.strokeStyle = "#eef2f7";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          for (let i = 0; i <= 5; i++) {
+            const y = margin.t + (i / 5) * H;
+            ctx.moveTo(margin.l, y);
+            ctx.lineTo(margin.l + W, y);
+          }
+          ctx.stroke();
+
+          // Axes
+          ctx.strokeStyle = "#334155";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(margin.l, margin.t);
+          ctx.lineTo(margin.l, margin.t + H);
+          ctx.lineTo(margin.l + W, margin.t + H);
+          ctx.stroke();
+
+          // Week 1 marker
+          const weekX = sx(CHECK_DAY);
+          ctx.setLineDash([7, 5]);
+          ctx.strokeStyle = "#64748b";
+          ctx.beginPath();
+          ctx.moveTo(weekX, margin.t);
+          ctx.lineTo(weekX, margin.t + H);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.fillStyle = "#64748b";
+          ctx.font = "12px system-ui, -apple-system, sans-serif";
+          ctx.fillText("Week 1", weekX - 18, margin.t + 10);
+
+          // Y labels
+          ctx.fillStyle = "#374151";
+          ctx.font = "12px system-ui, -apple-system, sans-serif";
+          for (let i = 0; i <= 5; i++) {
+            const v = Ymax * (1 - i / 5);
+            const y = margin.t + (i / 5) * H;
+            ctx.fillText(options.formatY(v), 8, y + 4);
+          }
+
+          // X labels
+          for (let day = 0; day <= SIM_DURATION; day++) {
+            const x = sx(day);
+            ctx.fillText(String(day), x - 5, margin.t + H + 20);
+            ctx.beginPath();
+            ctx.moveTo(x, margin.t + H);
+            ctx.lineTo(x, margin.t + H + 6);
+            ctx.stroke();
+          }
+
+          // Curve
+          if (hist.length >= 2) {
+            ctx.beginPath();
+            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = options.color;
+            hist.forEach((pt, i) => {
+              const x = sx(pt.t);
+              const y = sy(valueFn(pt));
+              if (i === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+          }
+
+          // legend/title
+          ctx.fillStyle = options.color;
+          ctx.fillRect(canvas.width - 170, margin.t + 7, 11, 11);
+          ctx.fillStyle = "#334155";
+          ctx.font = "13px system-ui, -apple-system, sans-serif";
+          ctx.fillText(options.label, canvas.width - 150, margin.t + 17);
+          ctx.fillText("Time (days)", margin.l + W / 2 - 30, canvas.height - 12);
+        }
+
+        useEffect(() => {
+          drawDish();
+          drawPlot(algaePlotRef, history, {
+            color: "#22c55e",
+            label: "Algae (million cells/mL)",
+            valueFn: (pt) => pt.algae / 1e6,
+            formatY: (v) => v.toFixed(1),
+          });
+          drawPlot(daphniaPlotRef, history, {
+            color: "#f97316",
+            label: "Daphnia (count)",
+            valueFn: (pt) => pt.daphnia,
+            formatY: (v) => Math.round(v).toString(),
+          });
+          // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [timeDays, nutrient, algaeConc, daphnia, history]);
+
+        function startPause() {
+          if (!running && simRef.current.t >= SIM_DURATION) {
+            resetSimulation(nutrientFrac);
+            setRunning(true);
+            return;
+          }
+          setRunning((r) => !r);
+        }
+
+        function resetAll() {
+          resetSimulation(nutrientFrac);
+        }
+
+        return (
+          <div className="container">
+            <h2 style={{ marginBottom: 6 }}>Algae–Daphnia Trophic Cascade Model</h2>
+            <p className="small" style={{ marginTop: 0 }}>
+              This version uses nutrients as the base resource, Auxenochlorella pyrenoidosa as the
+              algal prey, and Daphnia as the top predator. The culture jar is 50 mL total, the
+              algae start at 7.5 × 10^6 cells/mL, and the simulation runs for 14 days with a
+              one-week check marked on the plots.
+            </p>
+
+            <div className="row">
+              <div className="col card">
+                <canvas ref={dishRef} style={{ width: "100%", height: 380 }} />
+                <div className="control-row">
+                  <button
+                    onClick={startPause}
+                    style={{
+                      background: running ? "#ef4444" : "#0369a1",
+                      color: "#fff",
+                    }}
+                  >
+                    {running
+                      ? "Pause"
+                      : timeDays >= SIM_DURATION
+                      ? "Restart"
+                      : "Start"}
+                  </button>
+                  <button onClick={resetAll}>Reset</button>
+                </div>
+
+                <div className="legend">
+                  <div>
+                    <span className="dot" style={{ background: "#22c55e" }}></span>
+                    Algae
+                  </div>
+                  <div>
+                    <span className="dot" style={{ background: "#f97316" }}></span>
+                    Daphnia
+                  </div>
+                </div>
+
+                <div className="note small">
+                  <div>
+                    Time: <strong>{timeDays.toFixed(2)} / {SIM_DURATION}</strong> days
+                    {timeDays >= SIM_DURATION ? " (finished)" : ""}
+                  </div>
+                  <div style={{ marginTop: 4 }}>
+                    Nutrient: <strong>{nutrient.toFixed(2)}</strong> / 1.50
+                  </div>
+                  <div style={{ marginTop: 4 }}>
+                    Algae: <strong>{Math.round(algaeConc).toLocaleString()}</strong> cells/mL
+                  </div>
+                  <div style={{ marginTop: 4 }}>
+                    Daphnia: <strong>{Math.round(daphnia)}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="col card">
+                <h4 className="section-title">Controls</h4>
+
+                <div style={{ marginBottom: 14 }}>
+                  <div className="small" style={{ marginBottom: 6 }}>
+                    Starting nutrient availability. Quick:
+                    {" "}
+                    <button className="quick-btn" onClick={() => setNutrientFrac(1)}>
+                      Full
+                    </button>{" "}
+                    <button className="quick-btn" onClick={() => setNutrientFrac(0.75)}>
+                      3/4
+                    </button>{" "}
+                    <button className="quick-btn" onClick={() => setNutrientFrac(0.5)}>
+                      1/2
+                    </button>{" "}
+                    <button className="quick-btn" onClick={() => setNutrientFrac(0.25)}>
+                      1/4
+                    </button>{" "}
+                    <button className="quick-btn" onClick={() => setNutrientFrac(0)}>
+                      0
+                    </button>
+                  </div>
+
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={nutrientFrac}
+                    onChange={(e) => setNutrientFrac(+e.target.value)}
+                  />
+
+                  <div className="small" style={{ marginTop: 6 }}>
+                    Fraction: <span className="num">{nutrientFrac.toFixed(2)}</span>
+                    {" "}→ starting nutrient index = <span className="num">{nutrientFrac.toFixed(2)}</span>
+                  </div>
+                  <div className="small">
+                    Algae start fixed at <span className="num">7.5 × 10^6</span> cells/mL
+                    in a <span className="num">50 mL</span> jar.
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 14 }}>
+                  <div className="small" style={{ marginBottom: 6 }}>
+                    Starting daphnia count
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={20}
+                    step={1}
+                    value={daphnia}
+                    onChange={(e) => {
+                      const nextD = +e.target.value;
+                      setDaphnia(nextD);
+                      simRef.current.daphnia = nextD;
+                      setHistory((prev) => {
+                        if (prev.length === 0) return prev;
+                        const last = prev[prev.length - 1];
+                        const next = [...prev, { ...last, daphnia: nextD }];
+                        return next.slice(-3000);
+                      });
+                    }}
+                  />
+                  <div className="small">
+                    Daphnia: <strong>{Math.round(daphnia)}</strong>
+                  </div>
+                  <div className="small" style={{ marginTop: 6 }}>
+                    Increase this before pressing Start to test stronger top-down grazing.
+                  </div>
+                </div>
+
+                <div className="note small">
+                  Model notes: algal growth is nutrient-limited and crowding-limited;
+                  Daphnia grazing follows a Holling type II response; reproduction is
+                  tied to food intake; mortality and nutrient recycling are built in.
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 12 }} className="card">
+              <h4 className="section-title">Time-series</h4>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14 }}>
+                <div>
+                  <div className="small" style={{ marginBottom: 6 }}>
+                    Algae (green)
+                  </div>
+                  <canvas ref={algaePlotRef} style={{ width: "100%", height: 220 }} />
+                </div>
+
+                <div>
+                  <div className="small" style={{ marginBottom: 6 }}>
+                    Daphnia (orange)
+                  </div>
+                  <canvas ref={daphniaPlotRef} style={{ width: "100%", height: 220 }} />
+                </div>
+              </div>
+
+              <div className="small" style={{ marginTop: 8 }}>
+                The dashed vertical line marks the one-week check at day 7.
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<AlgaeDaphniaModel />);
+    </script>
+  </body>
 </html>
