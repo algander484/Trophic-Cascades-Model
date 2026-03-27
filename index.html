@@ -1,189 +1,175 @@
 <!DOCTYPE html>
-
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Nutrient–Algae–Daphnia Model</title>
-    <style>
-      body {
-        font-family: system-ui, -apple-system, Roboto, "Helvetica Neue", Arial;
-        background: #f1f5f9;
-        margin: 14px;
-        color: #0f172a;
-      }
-      .container {
-        max-width: 1100px;
-        margin: 0 auto;
-      }
-      .card {
-        background: #fff;
-        padding: 12px;
-        border-radius: 8px;
-        box-shadow: 0 1px 6px rgba(2, 6, 23, 0.06);
-      }
-      .row {
-        display: flex;
-        gap: 12px;
-        align-items: flex-start;
-        flex-wrap: wrap;
-      }
-      .col {
-        flex: 1;
-        min-width: 300px;
-      }
-      canvas {
-        width: 100%;
-        height: auto;
-        display: block;
-        border-radius: 6px;
-        border: 1px solid #e2e8f0;
-        background: #fff;
-      }
-      input[type="range"] {
-        width: 100%;
-      }
-      label {
-        cursor: pointer;
-      }
-      button {
-        padding: 6px 10px;
-        border-radius: 6px;
-        border: none;
-        cursor: pointer;
-      }
-      .legend {
-        display: flex;
-        gap: 12px;
-        margin-top: 8px;
-        font-size: 13px;
-        align-items: center;
-        flex-wrap: wrap;
-      }
-      .dot {
-        display: inline-block;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        margin-right: 6px;
-        vertical-align: middle;
-      }
-      .small {
-        font-size: 13px;
-        color: #374151;
-      }
-      .control-row {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        margin-top: 8px;
-        flex-wrap: wrap;
-      }
-      .num {
-        font-weight: 600;
-        margin-left: 6px;
-      }
-      .quick-btn {
-        background: #e2e8f0;
-        border-radius: 6px;
-        padding: 4px 8px;
-        cursor: pointer;
-      }
-    </style>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nutrient–Algae–Daphnia Model</title>
 
-```
-<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-```
 
-  </head>
-  <body>
-    <div id="root"></div>
+<style>
+body { font-family: Arial, sans-serif; background:#f1f5f9; margin:20px; color:#0f172a; }
+canvas { border:1px solid #ccc; margin-top:10px; background:#fff; }
+button { margin-right: 8px; margin-top: 10px; padding: 8px 12px; }
+.small { color:#475569; font-size: 13px; }
+</style>
+</head>
 
-```
+<body>
+<div id="root"></div>
+
 <script type="text/babel">
-  const { useState, useRef, useEffect } = React;
+const { useState, useRef, useEffect } = React;
 
-  function Model() {
-    const SIM_DURATION = 14;
-    const CHECKPOINT = 7;
-    const VOLUME = 6;
+function Model() {
+  const SIM_DURATION = 14;
 
-    const [N, setN] = useState(6000);
-    const [A, setA] = useState(28);
-    const [D, setD] = useState(2);
-    const [running, setRunning] = useState(false);
+  const [N, setN] = useState(6000);
+  const [A, setA] = useState(45000000);
+  const [D, setD] = useState(2);
+  const [running, setRunning] = useState(false);
 
-    const canvasRef = useRef(null);
-    const tRef = useRef(0);
+  const tRef = useRef(0);
+  const canvasRef = useRef(null);
 
-    function draw() {
-      const canvas = canvasRef.current;
-      canvas.width = 800;
-      canvas.height = 500;
-      const ctx = canvas.getContext("2d");
+  function draw() {
+    const c = canvasRef.current;
+    if (!c) return;
+    const ctx = c.getContext("2d");
 
-      ctx.clearRect(0,0,800,500);
+    c.width = 800;
+    c.height = 500;
 
+    ctx.clearRect(0, 0, 800, 500);
+
+    const cx = 400;
+    const cy = 260;
+    const R = 200;
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.strokeStyle = "#94a3b8";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    function randPoint() {
+      const r = Math.sqrt(Math.random()) * (R - 10);
+      const t = Math.random() * Math.PI * 2;
+      return { x: cx + r * Math.cos(t), y: cy + r * Math.sin(t) };
+    }
+
+    for (let i = 0; i < 180; i++) {
+      const p = randPoint();
+      ctx.fillStyle = "rgba(234,179,8,0.25)";
+      ctx.fillRect(p.x, p.y, 1.5, 1.5);
+    }
+
+    const algaeDots = Math.min(220, Math.round(A / 300000));
+    for (let i = 0; i < algaeDots; i++) {
+      const p = randPoint();
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, 5, 3, 0, 0, Math.PI * 2);
+      ctx.fillStyle = "#22c55e";
+      ctx.fill();
+    }
+
+    const daphniaDots = Math.min(80, Math.max(0, Math.round(D * 4)));
+    for (let i = 0; i < daphniaDots; i++) {
+      const p = randPoint();
+
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, 7, 4, 0, 0, Math.PI * 2);
+      ctx.fillStyle = "#f97316";
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(p.x + 2, p.y - 1, 1.2, 0, Math.PI * 2);
       ctx.fillStyle = "#000";
-      ctx.fillText("Time: " + tRef.current.toFixed(2), 20, 20);
-      ctx.fillText("Nutrient: " + Math.round(N), 20, 40);
-      ctx.fillText("Algae: " + Math.round(A), 20, 60);
-      ctx.fillText("Daphnia: " + Math.round(D), 20, 80);
+      ctx.fill();
     }
 
-    function step() {
-      const dt = 0.01;
-
-      let n = N;
-      let a = A;
-      let d = D;
-
-      const growth = 1.2 * (n / (200 + n)) * a;
-      const grazing = (0.02 * a) / (1 + 0.02 * 0.06 * a) * d;
-
-      const dN = -0.02*n*a + 0.2*a + 0.1*d + 10;
-      const dA = growth - grazing - 0.04*a;
-      const dD = 0.3*grazing - 0.03*d;
-
-      n += dN * dt;
-      a += dA * dt;
-      d += dD * dt;
-
-      setN(Math.max(0,n));
-      setA(Math.max(0,a));
-      setD(Math.max(0,d));
-
-      tRef.current += dt;
-      draw();
-
-      if (tRef.current < SIM_DURATION) {
-        requestAnimationFrame(step);
-      } else {
-        setRunning(false);
-      }
-    }
-
-    function start() {
-      if (!running) {
-        setRunning(true);
-        step();
-      }
-    }
-
-    return (
-      <div>
-        <h2>Nutrient → Algae → Daphnia</h2>
-        <canvas ref={canvasRef}></canvas>
-        <button onClick={start}>Start</button>
-      </div>
-    );
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "16px system-ui";
+    ctx.fillText("Time: " + tRef.current.toFixed(2), 20, 20);
+    ctx.fillText("Nutrient: " + Math.round(N), 20, 40);
+    ctx.fillText("Algae: " + Math.round(A).toLocaleString(), 20, 60);
+    ctx.fillText("Daphnia: " + D.toFixed(2), 20, 80);
   }
 
-  ReactDOM.createRoot(document.getElementById("root")).render(<Model />);
-</script>
-```
+  function step() {
+    const dt = 0.01;
 
-  </body>
+    let n = N;
+    let a = A;
+    let d = D;
+
+    const growth = 1.6 * (n / (300 + n)) * a;
+    const grazing = (0.003 * a) / (1 + 0.003 * 0.08 * a) * d;
+
+    const dN = -0.00000002 * n * a + 0.15 * a + 0.05 * d + 8;
+    const dA = growth - grazing - 0.02 * a;
+    const dD = 0.25 * grazing - 0.02 * d;
+
+    n += dN * dt;
+    a += dA * dt;
+    d += dD * dt;
+
+    n = Math.max(0, n);
+    a = Math.max(0, a);
+    d = Math.max(0, d);
+
+    setN(n);
+    setA(a);
+    setD(d);
+
+    tRef.current += dt;
+    draw();
+
+    if (tRef.current < SIM_DURATION) {
+      requestAnimationFrame(step);
+    } else {
+      setRunning(false);
+    }
+  }
+
+  function start() {
+    if (!running) {
+      setRunning(true);
+      step();
+    }
+  }
+
+  function reset() {
+    tRef.current = 0;
+    setN(6000);
+    setA(45000000);
+    setD(2);
+    setRunning(false);
+    draw();
+  }
+
+  useEffect(() => {
+    draw();
+  }, []);
+
+  return (
+    <div>
+      <h2>Nutrient → Algae → Daphnia</h2>
+      <p className="small">Two-week run with green algae and orange daphnia.</p>
+      <canvas ref={canvasRef}></canvas>
+      <br />
+      <button onClick={start}>Start</button>
+      <button onClick={reset}>Reset</button>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<Model />);
+</script>
+
+</body>
 </html>
