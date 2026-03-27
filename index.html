@@ -66,7 +66,7 @@
     <h2>Nutrient → Algae → Daphnia Model</h2>
     <p class="small">
       Two-week run with a week-1 checkpoint. Starting algae density is <b>7.5 × 10<sup>6</sup> per mL</b>, which is <b>45,000,000 total</b> in the 6 mL vessel.
-      This version uses a simple bounded model so it stays stable and never turns into <code>NaN</code>.
+      This version uses a simple bounded model and a stronger daphnia response so the predator visibly changes.
     </p>
 
     <div class="grid">
@@ -85,7 +85,7 @@
         <div class="statline">
           <div class="stat">Nutrient<br><b id="nStat">0</b></div>
           <div class="stat">Algae<br><b id="aStat">45,000,000</b></div>
-          <div class="stat">Daphnia<br><b id="dStat">2</b></div>
+          <div class="stat">Daphnia<br><b id="dStat">2.0</b></div>
         </div>
       </div>
 
@@ -160,9 +160,9 @@
     nutrientHalfSat: 140,
     algaeGrowth: 0.20,
     algaeMortality: 0.010,
-    grazingRate: 0.020,
+    grazingRate: 0.055,
     grazingHalfSat: 0.25,
-    daphniaConversion: 0.60,
+    daphniaBirth: 0.24,
     daphniaMortality: 0.010,
     nutrientRecycleFromAlgae: 0.05,
     nutrientRecycleFromDaphnia: 0.02,
@@ -199,9 +199,9 @@
     el.statusStat.textContent = running ? 'Running' : (t >= SIM_DURATION ? 'Finished' : 'Paused');
     el.nStat.textContent = Math.round(nutrient).toLocaleString();
     el.aStat.textContent = Math.round(algae * 1_000_000).toLocaleString();
-    el.dStat.textContent = daphnia.toFixed(2);
+    el.dStat.textContent = daphnia.toFixed(1);
     el.nutFracVal.textContent = nutrientFraction.toFixed(2);
-    el.daphniaStartVal.textContent = daphnia.toFixed(0);
+    el.daphniaStartVal.textContent = String(Math.round(daphnia));
   }
 
   function recordHistory() {
@@ -226,12 +226,12 @@
 
     const dN = nutrientInput - nutrientUptake + p.nutrientRecycleFromAlgae * p.algaeMortality * a + p.nutrientRecycleFromDaphnia * p.daphniaMortality * d;
     const dA = algaeGrowth - grazing - p.algaeMortality * a;
-    const dD = p.daphniaConversion * grazing - p.daphniaMortality * d;
+    const dD = p.daphniaBirth * grazing - p.daphniaMortality * d;
 
     return [dN, dA, dD];
   }
 
-  function eulerStep() {
+  function step() {
     const [dN, dA, dD] = derivatives([nutrient, algae, daphnia]);
     nutrient = clamp(nutrient + p.dt * dN, 0, 5000);
     algae = clamp(algae + p.dt * dA, 0, 100);
@@ -242,24 +242,9 @@
       algae = INITIAL_ALGAE_MILLIONS_PER_ML;
       daphnia = Number(el.daphniaStart.value);
     }
-  }
 
-  function rk4Step() {
-    const s0 = [nutrient, algae, daphnia];
-    const k1 = derivatives(s0);
-    const k2 = derivatives([nutrient + 0.5 * p.dt * k1[0], algae + 0.5 * p.dt * k1[1], daphnia + 0.5 * p.dt * k1[2]]);
-    const k3 = derivatives([nutrient + 0.5 * p.dt * k2[0], algae + 0.5 * p.dt * k2[1], daphnia + 0.5 * p.dt * k2[2]]);
-    const k4 = derivatives([nutrient + p.dt * k3[0], algae + p.dt * k3[1], daphnia + p.dt * k3[2]]);
-
-    nutrient = clamp(nutrient + (p.dt / 6) * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]), 0, 5000);
-    algae = clamp(algae + (p.dt / 6) * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]), 0, 100);
-    daphnia = clamp(daphnia + (p.dt / 6) * (k1[2] + 2 * k2[2] + 2 * k3[2] + k4[2]), 0, 100);
-
-    if (!isFiniteNumber(nutrient) || !isFiniteNumber(algae) || !isFiniteNumber(daphnia)) {
-      nutrient = FULL_N * nutrientFraction;
-      algae = INITIAL_ALGAE_MILLIONS_PER_ML;
-      daphnia = Number(el.daphniaStart.value);
-    }
+    t += p.dt;
+    recordHistory();
   }
 
   function rp(cx, cy, R) {
@@ -304,7 +289,7 @@
       ctx.restore();
     }
 
-    const dDots = Math.min(120, Math.max(0, Math.round(daphnia * 6)));
+    const dDots = Math.min(120, Math.max(0, Math.round(daphnia * 8)));
     for (let i = 0; i < dDots; i++) {
       const pnt = rp(cx, cy, R);
       ctx.save();
@@ -337,7 +322,7 @@
     ctx.fillText(`Time: ${t.toFixed(2)} days`, 18, 28);
     ctx.fillText(`Nutrient: ${Math.round(nutrient).toLocaleString()}`, 18, 52);
     ctx.fillText(`Algae: ${Math.round(algae * 1_000_000).toLocaleString()}`, 18, 76);
-    ctx.fillText(`Daphnia: ${daphnia.toFixed(2)}`, 18, 100);
+    ctx.fillText(`Daphnia: ${daphnia.toFixed(1)}`, 18, 100);
     ctx.fillStyle = '#64748b';
     ctx.fillText('Week 1 checkpoint at day 7', 18, 124);
   }
@@ -433,13 +418,9 @@
   function tick() {
     if (!running) return;
 
-    const stepsPerFrame = 2;
+    const stepsPerFrame = 1;
     for (let s = 0; s < stepsPerFrame; s++) {
-      // Use a very conservative Euler step first; if it behaves badly, RK4 is avoided entirely.
-      eulerStep();
-      if (t >= SIM_DURATION) break;
-      t += p.dt;
-      recordHistory();
+      step();
       if (t >= SIM_DURATION) {
         running = false;
         break;
