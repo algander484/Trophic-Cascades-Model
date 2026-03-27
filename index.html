@@ -66,7 +66,7 @@
     <h2>Nutrient → Algae → Daphnia Model</h2>
     <p class="small">
       Two-week run with a week-1 checkpoint. Starting algae density is <b>7.5 × 10<sup>6</sup> per mL</b>, which is <b>45,000,000 total</b> in the 6 mL vessel.
-      This version uses scaled units and explicit safety checks so the simulation does not turn into <code>NaN</code>.
+      This version uses a simple bounded model so it stays stable and never turns into <code>NaN</code>.
     </p>
 
     <div class="grid">
@@ -114,7 +114,7 @@
 
         <div class="small">
           <span class="pill">Teacher note</span><br>
-          This version is intentionally conservative so algae can grow without the numbers blowing up.
+          This version is intentionally conservative so algae can grow and daphnia can respond without numeric blowups.
         </div>
 
         <div class="plots">
@@ -143,10 +143,6 @@
   const VOLUME_ML = 6.0;
   const INITIAL_ALGAE_MILLIONS_PER_ML = 7.5;
 
-  // Scaled state:
-  // nutrient = units / mL
-  // algae = millions of cells / mL
-  // daphnia = count
   let t = 0;
   let running = false;
   let frameId = null;
@@ -159,18 +155,18 @@
   let pulseOn = true;
 
   const p = {
-    dt: 0.01,
-    nutrientPulse: 18,
-    nutrientHalfSat: 120,
-    algaeGrowth: 0.22,
-    algaeMortality: 0.012,
-    grazingRate: 0.018,
-    grazingHalfSat: 0.28,
-    daphniaConversion: 0.22,
-    daphniaMortality: 0.025,
-    nutrientRecycleFromAlgae: 0.06,
+    dt: 0.02,
+    nutrientPulse: 12,
+    nutrientHalfSat: 140,
+    algaeGrowth: 0.20,
+    algaeMortality: 0.010,
+    grazingRate: 0.010,
+    grazingHalfSat: 0.35,
+    daphniaConversion: 0.20,
+    daphniaMortality: 0.020,
+    nutrientRecycleFromAlgae: 0.05,
     nutrientRecycleFromDaphnia: 0.02,
-    nutrientUptake: 0.18
+    nutrientUptake: 0.10
   };
 
   const dish = document.getElementById('dish');
@@ -194,17 +190,9 @@
     resetBtn: document.getElementById('resetBtn')
   };
 
-  function isFiniteNumber(x) {
-    return Number.isFinite(x) && !Number.isNaN(x);
-  }
-
-  function safe(x, fallback) {
-    return isFiniteNumber(x) ? x : fallback;
-  }
-
-  function clamp(x, lo, hi) {
-    return Math.max(lo, Math.min(hi, x));
-  }
+  function isFiniteNumber(x) { return Number.isFinite(x) && !Number.isNaN(x); }
+  function safe(x, fallback) { return isFiniteNumber(x) ? x : fallback; }
+  function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
 
   function updateStats() {
     el.timeStat.textContent = t.toFixed(2);
@@ -225,13 +213,9 @@
 
   function derivatives(state) {
     let [n, a, d] = state;
-    n = safe(n, 0);
-    a = safe(a, 0);
-    d = safe(d, 0);
-
-    n = Math.max(0, n);
-    a = Math.max(0, a);
-    d = Math.max(0, d);
+    n = Math.max(0, safe(n, 0));
+    a = Math.max(0, safe(a, 0));
+    d = Math.max(0, safe(d, 0));
 
     const nutrientInput = pulseOn ? p.nutrientPulse : 0;
     const nLim = n / (p.nutrientHalfSat + n + 1e-9);
@@ -247,17 +231,35 @@
     return [dN, dA, dD];
   }
 
-  function rk4Step(n, a, d, dt) {
-    const [k1n, k1a, k1d] = derivatives([n, a, d]);
-    const [k2n, k2a, k2d] = derivatives([n + 0.5 * dt * k1n, a + 0.5 * dt * k1a, d + 0.5 * dt * k1d]);
-    const [k3n, k3a, k3d] = derivatives([n + 0.5 * dt * k2n, a + 0.5 * dt * k2a, d + 0.5 * dt * k2d]);
-    const [k4n, k4a, k4d] = derivatives([n + dt * k3n, a + dt * k3a, d + dt * k3d]);
+  function eulerStep() {
+    const [dN, dA, dD] = derivatives([nutrient, algae, daphnia]);
+    nutrient = clamp(nutrient + p.dt * dN, 0, 5000);
+    algae = clamp(algae + p.dt * dA, 0, 100);
+    daphnia = clamp(daphnia + p.dt * dD, 0, 100);
 
-    return [
-      n + (dt / 6) * (k1n + 2 * k2n + 2 * k3n + k4n),
-      a + (dt / 6) * (k1a + 2 * k2a + 2 * k3a + k4a),
-      d + (dt / 6) * (k1d + 2 * k2d + 2 * k3d + k4d)
-    ];
+    if (!isFiniteNumber(nutrient) || !isFiniteNumber(algae) || !isFiniteNumber(daphnia)) {
+      nutrient = FULL_N * nutrientFraction;
+      algae = INITIAL_ALGAE_MILLIONS_PER_ML;
+      daphnia = Number(el.daphniaStart.value);
+    }
+  }
+
+  function rk4Step() {
+    const s0 = [nutrient, algae, daphnia];
+    const k1 = derivatives(s0);
+    const k2 = derivatives([nutrient + 0.5 * p.dt * k1[0], algae + 0.5 * p.dt * k1[1], daphnia + 0.5 * p.dt * k1[2]]);
+    const k3 = derivatives([nutrient + 0.5 * p.dt * k2[0], algae + 0.5 * p.dt * k2[1], daphnia + 0.5 * p.dt * k2[2]]);
+    const k4 = derivatives([nutrient + p.dt * k3[0], algae + p.dt * k3[1], daphnia + p.dt * k3[2]]);
+
+    nutrient = clamp(nutrient + (p.dt / 6) * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]), 0, 5000);
+    algae = clamp(algae + (p.dt / 6) * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]), 0, 100);
+    daphnia = clamp(daphnia + (p.dt / 6) * (k1[2] + 2 * k2[2] + 2 * k3[2] + k4[2]), 0, 100);
+
+    if (!isFiniteNumber(nutrient) || !isFiniteNumber(algae) || !isFiniteNumber(daphnia)) {
+      nutrient = FULL_N * nutrientFraction;
+      algae = INITIAL_ALGAE_MILLIONS_PER_ML;
+      daphnia = Number(el.daphniaStart.value);
+    }
   }
 
   function rp(cx, cy, R) {
@@ -431,19 +433,11 @@
   function tick() {
     if (!running) return;
 
-    const stepsPerFrame = 4;
+    const stepsPerFrame = 2;
     for (let s = 0; s < stepsPerFrame; s++) {
-      const result = rk4Step(nutrient, algae, daphnia, p.dt);
-      nutrient = clamp(safe(result[0], 0), 0, 5000);
-      algae = clamp(safe(result[1], 0), 0, 100);
-      daphnia = clamp(safe(result[2], 0), 0, 100);
-
-      if (!isFiniteNumber(nutrient) || !isFiniteNumber(algae) || !isFiniteNumber(daphnia)) {
-        nutrient = FULL_N * nutrientFraction;
-        algae = INITIAL_ALGAE_MILLIONS_PER_ML;
-        daphnia = Number(el.daphniaStart.value);
-      }
-
+      // Use a very conservative Euler step first; if it behaves badly, RK4 is avoided entirely.
+      eulerStep();
+      if (t >= SIM_DURATION) break;
       t += p.dt;
       recordHistory();
       if (t >= SIM_DURATION) {
@@ -504,4 +498,3 @@
 </script>
 </body>
 </html>
-
