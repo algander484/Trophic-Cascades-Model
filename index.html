@@ -160,10 +160,10 @@
     nutrientHalfSat: 140,
     algaeGrowth: 0.20,
     algaeMortality: 0.010,
-    grazingRate: 0.010,
-    grazingHalfSat: 0.35,
-    daphniaConversion: 0.20,
-    daphniaMortality: 0.020,
+    grazingRate: 0.020,
+    grazingHalfSat: 0.25,
+    daphniaConversion: 0.60,
+    daphniaMortality: 0.010,
     nutrientRecycleFromAlgae: 0.05,
     nutrientRecycleFromDaphnia: 0.02,
     nutrientUptake: 0.10
@@ -199,9 +199,9 @@
     el.statusStat.textContent = running ? 'Running' : (t >= SIM_DURATION ? 'Finished' : 'Paused');
     el.nStat.textContent = Math.round(nutrient).toLocaleString();
     el.aStat.textContent = Math.round(algae * 1_000_000).toLocaleString();
-    el.dStat.textContent = Math.round(daphnia).toLocaleString();
+    el.dStat.textContent = daphnia.toFixed(2);
     el.nutFracVal.textContent = nutrientFraction.toFixed(2);
-    el.daphniaStartVal.textContent = String(Math.round(daphnia));
+    el.daphniaStartVal.textContent = daphnia.toFixed(0);
   }
 
   function recordHistory() {
@@ -304,7 +304,7 @@
       ctx.restore();
     }
 
-    const dDots = Math.min(120, Math.max(0, Math.round(daphnia)));
+    const dDots = Math.min(120, Math.max(0, Math.round(daphnia * 6)));
     for (let i = 0; i < dDots; i++) {
       const pnt = rp(cx, cy, R);
       ctx.save();
@@ -337,7 +337,7 @@
     ctx.fillText(`Time: ${t.toFixed(2)} days`, 18, 28);
     ctx.fillText(`Nutrient: ${Math.round(nutrient).toLocaleString()}`, 18, 52);
     ctx.fillText(`Algae: ${Math.round(algae * 1_000_000).toLocaleString()}`, 18, 76);
-    ctx.fillText(`Daphnia: ${Math.round(daphnia)}`, 18, 100);
+    ctx.fillText(`Daphnia: ${daphnia.toFixed(2)}`, 18, 100);
     ctx.fillStyle = '#64748b';
     ctx.fillText('Week 1 checkpoint at day 7', 18, 124);
   }
