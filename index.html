@@ -139,23 +139,17 @@
       const { useEffect, useRef, useState } = React;
 
       function AlgaeDaphniaModel() {
-        // Core experiment setup
-        const SIM_DURATION = 14.0; // days
-        const CHECK_DAY = 7.0; // one-week student check
-        const VOLUME_ML = 50.0; // total culture jar volume
+        const SIM_DURATION = 14.0;
+        const CHECK_DAY = 7.0;
+        const VOLUME_ML = 50.0;
         const INITIAL_ALGAE_CONC = 7.5e6; // 75 x 10^5 cells/mL
-        const INITIAL_ALGAE_TOTAL = INITIAL_ALGAE_CONC * VOLUME_ML;
-
-        // Simulation timestep
-        const dt = 0.003; // days
+        const DEFAULT_DAPHNIA = 4;
+        const dt = 0.003;
         const stepsPerFrame = 8;
 
-        // Starting values
-        const DEFAULT_DAPHNIA = 4;
-
-        // "Nutrient" is modeled as an availability index from 0 to ~1.5
-        const [nutrientFrac, setNutrientFrac] = useState(1.0);
-        const [nutrient, setNutrient] = useState(1.0);
+        // Nutrient levels: 0x, 1x, 2x
+        const [nutrientLevel, setNutrientLevel] = useState(1);
+        const [nutrient, setNutrient] = useState(1);
         const [algaeConc, setAlgaeConc] = useState(INITIAL_ALGAE_CONC);
         const [daphnia, setDaphnia] = useState(DEFAULT_DAPHNIA);
         const [timeDays, setTimeDays] = useState(0);
@@ -169,27 +163,25 @@
 
         const simRef = useRef({
           t: 0,
-          nutrient: 1.0,
+          nutrient: 1,
           algae: INITIAL_ALGAE_CONC,
           daphnia: DEFAULT_DAPHNIA,
           lastHistoryT: 0,
         });
 
-        // Reasonable starter parameters for a teaching model.
-        // These are intentionally simple and tunable.
         const params = {
-          muMax: 0.75, // /day, max algal specific growth rate
-          kN: 0.20, // nutrient half-saturation (availability units)
-          mA: 0.06, // /day, algae mortality
-          KBase: 1.6e7, // cells/mL, baseline crowding limit
-          KBoost: 3.2e7, // cells/mL, nutrient-dependent crowding boost
+          muMax: 0.75,
+          kN: 0.20,
+          mA: 0.06,
+          KBase: 1.6e7,
+          KBoost: 3.2e7,
 
-          gMax: 120000, // cells per daphnia per day, max grazing
-          hA: 3.5e6, // cells/mL, half-saturation for grazing
-          eD: 5.0e-6, // daphnia produced per algal cell consumed
-          mD: 0.18, // /day, daphnia mortality
+          gMax: 120000,
+          hA: 3.5e6,
+          eD: 5.0e-6,
+          mD: 0.18,
 
-          nutrientUse: 0.18, // converts algal growth into nutrient drawdown
+          nutrientUse: 0.18,
           nutrientRecycleAlgae: 0.06,
           nutrientRecycleGrazing: 0.03,
           nutrientRecycleDaphnia: 0.01,
@@ -199,50 +191,53 @@
           return Math.max(lo, Math.min(hi, v));
         }
 
-        function resetSimulation(nextNutrientFrac = nutrientFrac) {
+        function resetSimulation(nextNutrientLevel = nutrientLevel) {
           const nextState = {
             t: 0,
-            nutrient: nextNutrientFrac,
+            nutrient: nextNutrientLevel,
             algae: INITIAL_ALGAE_CONC,
             daphnia: DEFAULT_DAPHNIA,
             lastHistoryT: 0,
           };
           simRef.current = nextState;
           setTimeDays(0);
-          setNutrient(nextNutrientFrac);
+          setNutrient(nextNutrientLevel);
           setAlgaeConc(INITIAL_ALGAE_CONC);
           setDaphnia(DEFAULT_DAPHNIA);
-          setHistory([{ t: 0, nutrient: nextNutrientFrac, algae: INITIAL_ALGAE_CONC, daphnia: DEFAULT_DAPHNIA }]);
+          setHistory([
+            {
+              t: 0,
+              nutrient: nextNutrientLevel,
+              algae: INITIAL_ALGAE_CONC,
+              daphnia: DEFAULT_DAPHNIA,
+            },
+          ]);
           setRunning(false);
         }
 
-        // Reset whenever the user changes the starting nutrient fraction.
         useEffect(() => {
-          resetSimulation(nutrientFrac);
+          resetSimulation(nutrientLevel);
           // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [nutrientFrac]);
+        }, [nutrientLevel]);
 
         function derivatives(state) {
           const n = Math.max(0, state.nutrient);
-          const a = Math.max(0, state.algae); // cells/mL
+          const a = Math.max(0, state.algae);
           const d = Math.max(0, state.daphnia);
 
           const nutrientEffect = n / (params.kN + n);
           const carryingCapacity = params.KBase + params.KBoost * nutrientEffect;
 
-          // Algal growth: nutrient-limited + crowding limited
           const algalGrowth =
             params.muMax *
             nutrientEffect *
             a *
             Math.max(0, 1 - a / carryingCapacity);
 
-          // Holling type II grazing
           const grazingPerDaphnia = (params.gMax * a) / (params.hA + a);
-          const totalGrazing = grazingPerDaphnia * d; // cells/day
-          const grazingLossPerMl = totalGrazing / VOLUME_ML; // cells/mL/day
+          const totalGrazing = grazingPerDaphnia * d;
+          const grazingLossPerMl = totalGrazing / VOLUME_ML;
 
-          // Nutrient drawdown and recycling
           const nutrientDrawdown =
             params.nutrientUse * (algalGrowth / INITIAL_ALGAE_CONC);
 
@@ -251,7 +246,6 @@
             params.nutrientRecycleGrazing * grazingLossPerMl / INITIAL_ALGAE_CONC +
             params.nutrientRecycleDaphnia * (params.mD * d) / VOLUME_ML;
 
-          // State derivatives
           const dN = nutrientReturn - nutrientDrawdown;
           const dA = algalGrowth - grazingLossPerMl - params.mA * a;
           const dD = params.eD * totalGrazing - params.mD * d;
@@ -297,7 +291,7 @@
             lastHistoryT: state.lastHistoryT,
           };
 
-          next.nutrient = clamp(next.nutrient, 0, 1.5);
+          next.nutrient = clamp(next.nutrient, 0, 2.5);
           next.algae = Math.max(0, next.algae);
           next.daphnia = Math.max(0, next.daphnia);
 
@@ -312,10 +306,7 @@
           for (let i = 0; i < stepsPerFrame; i++) {
             cur = rk4Step(cur, dt);
 
-            if (
-              cur.t - lastRecorded >= 0.05 ||
-              cur.t >= SIM_DURATION
-            ) {
+            if (cur.t - lastRecorded >= 0.05 || cur.t >= SIM_DURATION) {
               points.push({
                 t: cur.t,
                 nutrient: cur.nutrient,
@@ -389,7 +380,6 @@
 
           ctx.clearRect(0, 0, w, h);
 
-          // Dish
           ctx.fillStyle = "#ffffff";
           ctx.beginPath();
           ctx.arc(cx, cy, R, 0, Math.PI * 2);
@@ -408,7 +398,6 @@
             };
           }
 
-          // Algae dots: small green points
           const algaeDots = clamp(
             Math.round((algaeConc / INITIAL_ALGAE_CONC) * 500),
             50,
@@ -421,7 +410,6 @@
             ctx.fillRect(p.x, p.y, 1.4, 1.4);
           }
 
-          // Daphnia: orange circles
           const daphniaDots = clamp(Math.round(daphnia), 0, 140);
           for (let i = 0; i < daphniaDots; i++) {
             const p = randomPointInDish();
@@ -435,12 +423,11 @@
             ctx.restore();
           }
 
-          // Labels
           ctx.fillStyle = "#0f172a";
           ctx.font = "16px system-ui, -apple-system, sans-serif";
           ctx.fillText(`Time: ${timeDays.toFixed(2)} days`, 18, 28);
           ctx.fillText(
-            `Nutrient availability: ${nutrient.toFixed(2)} / 1.50`,
+            `Nutrient availability: ${nutrient.toFixed(2)} / 2.00`,
             18,
             52
           );
@@ -456,11 +443,7 @@
             18,
             100
           );
-          ctx.fillText(
-            `Daphnia: ${Math.round(daphnia)}`,
-            18,
-            124
-          );
+          ctx.fillText(`Daphnia: ${Math.round(daphnia)}`, 18, 124);
           ctx.fillStyle = "#0369a1";
           ctx.fillText(
             `Week 1 check at day ${CHECK_DAY.toFixed(0)} (plots marked below)`,
@@ -495,7 +478,6 @@
           const sy = (v) =>
             margin.t + (1 - v / Ymax) * H;
 
-          // Background grid
           ctx.strokeStyle = "#eef2f7";
           ctx.lineWidth = 1;
           ctx.beginPath();
@@ -506,7 +488,6 @@
           }
           ctx.stroke();
 
-          // Axes
           ctx.strokeStyle = "#334155";
           ctx.lineWidth = 1;
           ctx.beginPath();
@@ -515,7 +496,6 @@
           ctx.lineTo(margin.l + W, margin.t + H);
           ctx.stroke();
 
-          // Week 1 marker
           const weekX = sx(CHECK_DAY);
           ctx.setLineDash([7, 5]);
           ctx.strokeStyle = "#64748b";
@@ -529,7 +509,6 @@
           ctx.font = "12px system-ui, -apple-system, sans-serif";
           ctx.fillText("Week 1", weekX - 18, margin.t + 10);
 
-          // Y labels
           ctx.fillStyle = "#374151";
           ctx.font = "12px system-ui, -apple-system, sans-serif";
           for (let i = 0; i <= 5; i++) {
@@ -538,7 +517,6 @@
             ctx.fillText(options.formatY(v), 8, y + 4);
           }
 
-          // X labels
           for (let day = 0; day <= SIM_DURATION; day++) {
             const x = sx(day);
             ctx.fillText(String(day), x - 5, margin.t + H + 20);
@@ -548,7 +526,6 @@
             ctx.stroke();
           }
 
-          // Curve
           if (hist.length >= 2) {
             ctx.beginPath();
             ctx.lineWidth = 2.5;
@@ -562,7 +539,6 @@
             ctx.stroke();
           }
 
-          // legend/title
           ctx.fillStyle = options.color;
           ctx.fillRect(canvas.width - 170, margin.t + 7, 11, 11);
           ctx.fillStyle = "#334155";
@@ -590,7 +566,7 @@
 
         function startPause() {
           if (!running && simRef.current.t >= SIM_DURATION) {
-            resetSimulation(nutrientFrac);
+            resetSimulation(nutrientLevel);
             setRunning(true);
             return;
           }
@@ -598,7 +574,7 @@
         }
 
         function resetAll() {
-          resetSimulation(nutrientFrac);
+          resetSimulation(nutrientLevel);
         }
 
         return (
@@ -648,7 +624,7 @@
                     {timeDays >= SIM_DURATION ? " (finished)" : ""}
                   </div>
                   <div style={{ marginTop: 4 }}>
-                    Nutrient: <strong>{nutrient.toFixed(2)}</strong> / 1.50
+                    Nutrient: <strong>{nutrient.toFixed(2)}</strong> / 2.00
                   </div>
                   <div style={{ marginTop: 4 }}>
                     Algae: <strong>{Math.round(algaeConc).toLocaleString()}</strong> cells/mL
@@ -664,41 +640,28 @@
 
                 <div style={{ marginBottom: 14 }}>
                   <div className="small" style={{ marginBottom: 6 }}>
-                    Starting nutrient availability. Quick:
-                    {" "}
-                    <button className="quick-btn" onClick={() => setNutrientFrac(1)}>
-                      Full
-                    </button>{" "}
-                    <button className="quick-btn" onClick={() => setNutrientFrac(0.75)}>
-                      3/4
-                    </button>{" "}
-                    <button className="quick-btn" onClick={() => setNutrientFrac(0.5)}>
-                      1/2
-                    </button>{" "}
-                    <button className="quick-btn" onClick={() => setNutrientFrac(0.25)}>
-                      1/4
-                    </button>{" "}
-                    <button className="quick-btn" onClick={() => setNutrientFrac(0)}>
-                      0
-                    </button>
+                    Starting nutrient level
                   </div>
 
                   <input
                     type="range"
                     min={0}
-                    max={1}
-                    step={0.01}
-                    value={nutrientFrac}
-                    onChange={(e) => setNutrientFrac(+e.target.value)}
+                    max={2}
+                    step={1}
+                    value={nutrientLevel}
+                    onChange={(e) => setNutrientLevel(+e.target.value)}
                   />
 
                   <div className="small" style={{ marginTop: 6 }}>
-                    Fraction: <span className="num">{nutrientFrac.toFixed(2)}</span>
-                    {" "}→ starting nutrient index = <span className="num">{nutrientFrac.toFixed(2)}</span>
+                    Level: <strong>{nutrientLevel}x</strong>
                   </div>
-                  <div className="small">
-                    Algae start fixed at <span className="num">7.5 × 10^6</span> cells/mL
-                    in a <span className="num">50 mL</span> jar.
+
+                  <div className="small" style={{ marginTop: 6 }}>
+                    Quick:
+                    {" "}
+                    <button className="quick-btn" onClick={() => setNutrientLevel(0)}>0</button>{" "}
+                    <button className="quick-btn" onClick={() => setNutrientLevel(1)}>1x</button>{" "}
+                    <button className="quick-btn" onClick={() => setNutrientLevel(2)}>2x</button>
                   </div>
                 </div>
 
