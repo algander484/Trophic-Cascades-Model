@@ -241,17 +241,22 @@
             params.nutrientRecycleGrazing * grazingLossPerMl / INITIAL_ALGAE_CONC +
             params.nutrientRecycleDaphnia * (params.mD * d) / VOLUME_ML;
 
-          const foodIndex =
-            grazingLossPerMl / (grazingLossPerMl + params.foodHalfSat);
+         const foodIndex =
+  grazingLossPerMl / (grazingLossPerMl + params.foodHalfSat);
 
-          const nutrientForDaphnia = 0.35 + 0.65 * nutrientEffect;
-          const birthRate = params.eD * foodIndex * nutrientForDaphnia;
-          const crowdingLimit = 38 + 40 * nutrientEffect;
+const nutrientForDaphnia = 0.35 + 0.65 * nutrientEffect;
 
-          const dN = nutrientReturn - nutrientDrawdown;
-          const dA = algalGrowth - grazingLossPerMl - params.mA * a;
-          const dD = birthRate * d * (1 - d / crowdingLimit) - params.mD * d;
+// stronger but still controlled Daphnia growth
+const birthRate =
+  params.eD *
+  (0.45 + 0.55 * foodIndex) *
+  (0.55 + 0.45 * nutrientForDaphnia);
 
+const crowdingLimit = 58 + 18 * nutrientEffect;
+
+const dN = nutrientReturn - nutrientDrawdown;
+const dA = algalGrowth - grazingLossPerMl - params.mA * a;
+const dD = birthRate * d * (1 - d / crowdingLimit) - params.mD * d;
           return [dN, dA, dD];
         }
 
