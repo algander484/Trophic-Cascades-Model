@@ -159,18 +159,18 @@
         });
 
         const params = {
-          muMax: 0.55,
+          muMax: 0.52,
           kN: 0.20,
           mA: 0.05,
           KBase: 1.4e7,
           KBoost: 2.0e7,
 
-          gMax: 2.2e6,
-          hA: 3.5e6,
-          eD: 0.72,
-          mD: 0.025,
+          gMax: 7.0e5,
+          hA: 5e6,
+          eD: 0.18,
+          mD: 0.03,
 
-          foodHalfSat: 90000,
+          foodHalfSat: 120000,
 
           nutrientUse: 0.18,
           nutrientRecycleAlgae: 0.06,
@@ -241,22 +241,17 @@
             params.nutrientRecycleGrazing * grazingLossPerMl / INITIAL_ALGAE_CONC +
             params.nutrientRecycleDaphnia * (params.mD * d) / VOLUME_ML;
 
-         const foodIndex =
+const foodIndex =
   grazingLossPerMl / (grazingLossPerMl + params.foodHalfSat);
 
-const nutrientForDaphnia = 0.35 + 0.65 * nutrientEffect;
+const nutrientDrive = clamp(0.45 + 0.28 * n, 0.35, 1.0);
 
-// stronger but still controlled Daphnia growth
-const birthRate =
-  params.eD *
-  (0.45 + 0.55 * foodIndex) *
-  (0.55 + 0.45 * nutrientForDaphnia);
-
-const crowdingLimit = 58 + 18 * nutrientEffect;
+// Gives about 0X < 1X < 2X response without crashing algae
+const carryingLimit = 24 + 55 * nutrientDrive + 10 * foodIndex;
 
 const dN = nutrientReturn - nutrientDrawdown;
 const dA = algalGrowth - grazingLossPerMl - params.mA * a;
-const dD = birthRate * d * (1 - d / crowdingLimit) - params.mD * d;
+const dD = 0.18 * d * (1 - d / carryingLimit) - params.mD * d;
           return [dN, dA, dD];
         }
 
