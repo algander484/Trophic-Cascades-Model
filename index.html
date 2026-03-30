@@ -168,10 +168,10 @@
           KBoost: 1.8e7,
 
           // Stronger grazing so top-down changes are easier for students to see.
-          gMax: 180000,
-          hA: 2.5e6,
-          eD: 1.0e-5,
-          mD: 0.14,
+          gMax: 2.0e6,
+          hA: 1.5e6,
+          eD: 2.0e-5,
+          mD: 0.12,
 
           nutrientUse: 0.18,
           nutrientRecycleAlgae: 0.06,
@@ -217,36 +217,13 @@
         }, [startNutrientLevel, startDaphnia]);
 
         function derivatives(state) {
-          const n = Math.max(0, state.nutrient);
-          const a = Math.max(0, state.algae);
-          const d = Math.max(0, state.daphnia);
-
-          const nutrientEffect = n / (params.kN + n);
-          const carryingCapacity = params.KBase + params.KBoost * nutrientEffect;
-
-          const algalGrowth =
-            params.muMax *
-            nutrientEffect *
-            a *
-            Math.max(0, 1 - a / carryingCapacity);
-
           const grazingPerDaphnia = (params.gMax * a) / (params.hA + a);
-          const totalGrazing = grazingPerDaphnia * d;
-          const grazingLossPerMl = totalGrazing / VOLUME_ML;
 
-          const nutrientDrawdown =
-            params.nutrientUse * (algalGrowth / INITIAL_ALGAE_CONC);
+// teaching scale: makes top-down grazing visible to students
+const predatorAmplifier = 12;
+const totalGrazing = predatorAmplifier * grazingPerDaphnia * d;
 
-          const nutrientReturn =
-            params.nutrientRecycleAlgae * (params.mA * a) / INITIAL_ALGAE_CONC +
-            params.nutrientRecycleGrazing * grazingLossPerMl / INITIAL_ALGAE_CONC +
-            params.nutrientRecycleDaphnia * (params.mD * d) / VOLUME_ML;
-
-          const dN = nutrientReturn - nutrientDrawdown;
-          const dA = algalGrowth - grazingLossPerMl - params.mA * a;
-          const dD = params.eD * totalGrazing - params.mD * d;
-
-          return [dN, dA, dD];
+const grazingLossPerMl = totalGrazing / VOLUME_ML;
         }
 
         function rk4Step(state, dtDays) {
