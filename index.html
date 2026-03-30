@@ -143,7 +143,6 @@
         const dt = 0.003;
         const stepsPerFrame = 8;
 
-        // Nutrient levels: 0x, 1x, 2x
         const [nutrientLevel, setNutrientLevel] = useState(1);
         const [nutrient, setNutrient] = useState(1);
         const [algaeConc, setAlgaeConc] = useState(INITIAL_ALGAE_CONC);
@@ -160,26 +159,33 @@
         const simRef = useRef({
           t: 0,
           nutrient: 1,
+          nutrientTreatment: 1,
           algae: INITIAL_ALGAE_CONC,
           daphnia: DEFAULT_DAPHNIA,
           lastHistoryT: 0,
         });
 
         const params = {
-          muMax: 0.75,
-          kN: 0.20,
-          mA: 0.06,
-          KBase: 1.6e7,
-          KBoost: 3.2e7,
+          // Algae: slower, more strongly nutrient-limited growth
+          muMax: 0.88,
+          kN: 0.65,
+          nutrientHill: 1.8,
+          mA: 0.07,
+          KBase: 1.2e7,
+          KBoost: 5.0e7,
 
-          gMax: 120000,
-          hA: 3.5e6,
-          eD: 5.0e-6,
-          mD: 0.18,
+          // Daphnia: lower conversion efficiency, higher mortality, weak self-limitation
+          gMax: 90000,
+          hA: 5.0e6,
+          eD: 4.2e-6,
+          mD: 0.28,
+          qD: 0.0009,
 
-          nutrientUse: 0.18,
-          nutrientRecycleAlgae: 0.06,
-          nutrientRecycleGrazing: 0.03,
+          // Nutrient cycling: keep the pool from collapsing instantly, but not so much that it erases treatment differences
+          nutrientInputBase: 0.035,
+          nutrientUse: 0.03,
+          nutrientRecycleAlgae: 0.02,
+          nutrientRecycleGrazing: 0.02,
           nutrientRecycleDaphnia: 0.01,
         };
 
@@ -191,6 +197,7 @@
           const nextState = {
             t: 0,
             nutrient: nextNutrientLevel,
+            nutrientTreatment: nextNutrientLevel,
             algae: INITIAL_ALGAE_CONC,
             daphnia: DEFAULT_DAPHNIA,
             lastHistoryT: 0,
@@ -220,8 +227,12 @@
           const n = Math.max(0, state.nutrient);
           const a = Math.max(0, state.algae);
           const d = Math.max(0, state.daphnia);
+          const treatment = Math.max(0, state.nutrientTreatment ?? nutrientLevel);
 
-          const nutrientEffect = n / (params.kN + n);
+          const nutrientEffect =
+            Math.pow(n, params.nutrientHill) /
+            (Math.pow(params.kN, params.nutrientHill) + Math.pow(n, params.nutrientHill));
+
           const carryingCapacity = params.KBase + params.KBoost * nutrientEffect;
 
           const algalGrowth =
@@ -234,17 +245,23 @@
           const totalGrazing = grazingPerDaphnia * d;
           const grazingLossPerMl = totalGrazing / VOLUME_ML;
 
+          const nutrientInput = params.nutrientInputBase * treatment;
+
           const nutrientDrawdown =
-            params.nutrientUse * (algalGrowth / INITIAL_ALGAE_CONC);
+            params.nutrientUse * (algalGrowth / 1e7);
 
           const nutrientReturn =
-            params.nutrientRecycleAlgae * (params.mA * a) / INITIAL_ALGAE_CONC +
-            params.nutrientRecycleGrazing * grazingLossPerMl / INITIAL_ALGAE_CONC +
+            nutrientInput +
+            params.nutrientRecycleAlgae * (params.mA * a) / 1e7 +
+            params.nutrientRecycleGrazing * grazingLossPerMl / 1e7 +
             params.nutrientRecycleDaphnia * (params.mD * d) / VOLUME_ML;
 
           const dN = nutrientReturn - nutrientDrawdown;
           const dA = algalGrowth - grazingLossPerMl - params.mA * a;
-          const dD = params.eD * totalGrazing - params.mD * d;
+          const dD =
+            params.eD * totalGrazing -
+            params.mD * d -
+            params.qD * d * d;
 
           return [dN, dA, dD];
         }
@@ -253,6 +270,7 @@
           const [k1N, k1A, k1D] = derivatives(state);
 
           const s2 = {
+            nutrientTreatment: state.nutrientTreatment,
             nutrient: state.nutrient + 0.5 * dtDays * k1N,
             algae: state.algae + 0.5 * dtDays * k1A,
             daphnia: state.daphnia + 0.5 * dtDays * k1D,
@@ -260,6 +278,7 @@
           const [k2N, k2A, k2D] = derivatives(s2);
 
           const s3 = {
+            nutrientTreatment: state.nutrientTreatment,
             nutrient: state.nutrient + 0.5 * dtDays * k2N,
             algae: state.algae + 0.5 * dtDays * k2A,
             daphnia: state.daphnia + 0.5 * dtDays * k2D,
@@ -267,6 +286,7 @@
           const [k3N, k3A, k3D] = derivatives(s3);
 
           const s4 = {
+            nutrientTreatment: state.nutrientTreatment,
             nutrient: state.nutrient + dtDays * k3N,
             algae: state.algae + dtDays * k3A,
             daphnia: state.daphnia + dtDays * k3D,
@@ -275,6 +295,7 @@
 
           const next = {
             t: state.t + dtDays,
+            nutrientTreatment: state.nutrientTreatment,
             nutrient:
               state.nutrient +
               (dtDays / 6) * (k1N + 2 * k2N + 2 * k3N + k4N),
@@ -287,7 +308,7 @@
             lastHistoryT: state.lastHistoryT,
           };
 
-          next.nutrient = clamp(next.nutrient, 0, 2.5);
+          next.nutrient = clamp(next.nutrient, 0, 3.0);
           next.algae = Math.max(0, next.algae);
           next.daphnia = Math.max(0, next.daphnia);
 
@@ -394,7 +415,6 @@
             };
           }
 
-          // Slightly larger algae dots
           const algaeDots = clamp(
             Math.round((algaeConc / INITIAL_ALGAE_CONC) * 500),
             50,
@@ -695,7 +715,7 @@
                 <div className="note small">
                   Model notes: algal growth is nutrient-limited and crowding-limited;
                   Daphnia grazing follows a Holling type II response; reproduction is
-                  tied to food intake; mortality and nutrient recycling are built in.
+                  tied to food intake; mortality, weak self-limitation, and nutrient recycling are built in.
                 </div>
               </div>
             </div>
