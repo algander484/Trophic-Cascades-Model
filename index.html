@@ -133,7 +133,7 @@
         const SIM_DURATION = 14.0;
         const CHECK_DAY = 7.0;
         const VOLUME_ML = 50.0;
-        const INITIAL_ALGAE_CONC = 7.5e6; // 75 x 10^5 cells/mL
+        const INITIAL_ALGAE_CONC = 7.5e6;
         const DEFAULT_DAPHNIA = 4;
         const dt = 0.003;
         const stepsPerFrame = 8;
@@ -161,26 +161,23 @@
         });
 
         const params = {
-          // Algae: more clearly nutrient-sensitive, slower saturation between 1x and 2x
-          muMax: 0.82,
-          kN: 1.05,
-          nutrientHill: 1.8,
-          mA: 0.08,
+          muMax: 0.86,
+          kN: 0.95,
+          nutrientHill: 1.7,
+          mA: 0.075,
           KBase: 1.0e7,
-          KBoost: 6.0e7,
+          KBoost: 5.5e7,
 
-          // Daphnia: much more conservative
-          gMax: 65000,
-          hA: 6.5e6,
-          eD: 4.8e-6,
-          mD: 0.24,
+          gMax: 70000,
+          hA: 5.8e6,
+          eD: 8.0e-6,
+          mD: 0.18,
 
-          // Nutrient cycling
-          nutrientInputBase: 0.04,
-          nutrientUse: 0.022,
-          nutrientRecycleAlgae: 0.02,
-          nutrientRecycleGrazing: 0.015,
-          nutrientRecycleDaphnia: 0.008,
+          nutrientInputBase: 0.045,
+          nutrientUse: 0.024,
+          nutrientRecycleAlgae: 0.022,
+          nutrientRecycleGrazing: 0.016,
+          nutrientRecycleDaphnia: 0.009,
         };
 
         function clamp(v, lo, hi) {
@@ -240,9 +237,7 @@
           const grazingLossPerMl = totalGrazing / VOLUME_ML;
 
           const nutrientInput = params.nutrientInputBase * treatment;
-
-          const nutrientDrawdown =
-            params.nutrientUse * (algalGrowth / 1e7);
+          const nutrientDrawdown = params.nutrientUse * (algalGrowth / 1e7);
 
           const nutrientReturn =
             nutrientInput +
@@ -250,9 +245,11 @@
             params.nutrientRecycleGrazing * grazingLossPerMl / 1e7 +
             params.nutrientRecycleDaphnia * (params.mD * d) / VOLUME_ML;
 
-          const daphniaCap = 115 + 20 * nutrientEffect; // keeps totals in the low hundreds
+          const daphniaCap = 165 + 30 * nutrientEffect;
           const crowdingFactor = Math.max(0, 1 - d / daphniaCap);
-          const daphniaBirths = params.eD * totalGrazing * crowdingFactor;
+
+          const daphniaBirths =
+            params.eD * totalGrazing * (0.35 + 0.65 * nutrientEffect) * crowdingFactor;
 
           const dN = nutrientReturn - nutrientDrawdown;
           const dA = algalGrowth - grazingLossPerMl - params.mA * a;
@@ -328,9 +325,7 @@
               lastRecorded = cur.t;
             }
 
-            if (cur.t >= SIM_DURATION) {
-              break;
-            }
+            if (cur.t >= SIM_DURATION) break;
           }
 
           cur.lastHistoryT = lastRecorded;
@@ -348,16 +343,12 @@
             });
           }
 
-          if (cur.t >= SIM_DURATION) {
-            setRunning(false);
-          }
+          if (cur.t >= SIM_DURATION) setRunning(false);
         }
 
         useEffect(() => {
           if (!running) {
-            if (rafRef.current) {
-              cancelAnimationFrame(rafRef.current);
-            }
+            if (rafRef.current) cancelAnimationFrame(rafRef.current);
             return;
           }
 
@@ -369,9 +360,7 @@
           rafRef.current = requestAnimationFrame(loop);
 
           return () => {
-            if (rafRef.current) {
-              cancelAnimationFrame(rafRef.current);
-            }
+            if (rafRef.current) cancelAnimationFrame(rafRef.current);
           };
           // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [running]);
@@ -440,11 +429,7 @@
           ctx.fillStyle = "#0f172a";
           ctx.font = "16px system-ui, -apple-system, sans-serif";
           ctx.fillText(`Time: ${timeDays.toFixed(2)} days`, 18, 28);
-          ctx.fillText(
-            `Nutrient level: ${nutrient.toFixed(2)}x`,
-            18,
-            52
-          );
+          ctx.fillText(`Nutrient level: ${nutrient.toFixed(2)}x`, 18, 52);
           ctx.fillText(
             `Algae: ${Math.round(algaeConc).toLocaleString()} cells/mL`,
             18,
@@ -487,7 +472,7 @@
           const vmax = Math.max(...values, 1);
           const Ymax = vmax * 1.15;
 
-          const sx = (t) => margin.l + ((t - 0) / (SIM_DURATION - 0)) * W;
+          const sx = (t) => margin.l + ((t - 0) / SIM_DURATION) * W;
           const sy = (v) => margin.t + (1 - v / Ymax) * H;
 
           ctx.strokeStyle = "#eef2f7";
@@ -709,8 +694,8 @@
 
                 <div className="note small">
                   Model notes: algal growth is nutrient-limited and crowding-limited;
-                  Daphnia grazing follows a Holling type II response; reproduction is
-                  tied to food intake; mortality, a hard population ceiling, and nutrient recycling are built in.
+                  Daphnia grazing follows a Holling type II response; reproduction is tied to food intake;
+                  mortality, moderate crowding limits, and nutrient recycling are built in.
                 </div>
               </div>
             </div>
