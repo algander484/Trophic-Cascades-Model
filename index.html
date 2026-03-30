@@ -54,10 +54,6 @@
         width: 100%;
       }
 
-      label {
-        cursor: pointer;
-      }
-
       button {
         padding: 7px 11px;
         border-radius: 8px;
@@ -398,6 +394,7 @@
             };
           }
 
+          // Slightly larger algae dots
           const algaeDots = clamp(
             Math.round((algaeConc / INITIAL_ALGAE_CONC) * 500),
             50,
@@ -407,7 +404,9 @@
           for (let i = 0; i < algaeDots; i++) {
             const p = randomPointInDish();
             ctx.fillStyle = "rgba(34,197,94,0.55)";
-            ctx.fillRect(p.x, p.y, 1.4, 1.4);
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 2.2, 0, Math.PI * 2);
+            ctx.fill();
           }
 
           const daphniaDots = clamp(Math.round(daphnia), 0, 140);
@@ -427,7 +426,7 @@
           ctx.font = "16px system-ui, -apple-system, sans-serif";
           ctx.fillText(`Time: ${timeDays.toFixed(2)} days`, 18, 28);
           ctx.fillText(
-            `Nutrient availability: ${nutrient.toFixed(2)} / 2.00`,
+            `Nutrient level: ${nutrient.toFixed(2)}x`,
             18,
             52
           );
@@ -473,10 +472,8 @@
           const vmax = Math.max(...values, 1);
           const Ymax = vmax * 1.15;
 
-          const sx = (t) =>
-            margin.l + ((t - 0) / (SIM_DURATION - 0)) * W;
-          const sy = (v) =>
-            margin.t + (1 - v / Ymax) * H;
+          const sx = (t) => margin.l + ((t - 0) / (SIM_DURATION - 0)) * W;
+          const sy = (v) => margin.t + (1 - v / Ymax) * H;
 
           ctx.strokeStyle = "#eef2f7";
           ctx.lineWidth = 1;
@@ -624,7 +621,7 @@
                     {timeDays >= SIM_DURATION ? " (finished)" : ""}
                   </div>
                   <div style={{ marginTop: 4 }}>
-                    Nutrient: <strong>{nutrient.toFixed(2)}</strong> / 2.00
+                    Nutrient: <strong>{nutrient.toFixed(2)}x</strong>
                   </div>
                   <div style={{ marginTop: 4 }}>
                     Algae: <strong>{Math.round(algaeConc).toLocaleString()}</strong> cells/mL
@@ -659,7 +656,7 @@
                   <div className="small" style={{ marginTop: 6 }}>
                     Quick:
                     {" "}
-                    <button className="quick-btn" onClick={() => setNutrientLevel(0)}>0</button>{" "}
+                    <button className="quick-btn" onClick={() => setNutrientLevel(0)}>0x</button>{" "}
                     <button className="quick-btn" onClick={() => setNutrientLevel(1)}>1x</button>{" "}
                     <button className="quick-btn" onClick={() => setNutrientLevel(2)}>2x</button>
                   </div>
