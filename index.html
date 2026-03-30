@@ -92,11 +92,6 @@
         flex-wrap: wrap;
       }
 
-      .num {
-        font-weight: 700;
-        margin-left: 4px;
-      }
-
       .quick-btn {
         background: #e2e8f0;
         border-radius: 7px;
@@ -166,27 +161,26 @@
         });
 
         const params = {
-          // Algae: slower, more strongly nutrient-limited growth
-          muMax: 0.88,
-          kN: 0.65,
+          // Algae: more clearly nutrient-sensitive, slower saturation between 1x and 2x
+          muMax: 0.82,
+          kN: 1.05,
           nutrientHill: 1.8,
-          mA: 0.07,
-          KBase: 1.2e7,
-          KBoost: 5.0e7,
+          mA: 0.08,
+          KBase: 1.0e7,
+          KBoost: 6.0e7,
 
-          // Daphnia: lower conversion efficiency, higher mortality, weak self-limitation
-          gMax: 90000,
-          hA: 5.0e6,
-          eD: 4.2e-6,
-          mD: 0.28,
-          qD: 0.0009,
+          // Daphnia: much more conservative
+          gMax: 65000,
+          hA: 6.5e6,
+          eD: 4.8e-6,
+          mD: 0.24,
 
-          // Nutrient cycling: keep the pool from collapsing instantly, but not so much that it erases treatment differences
-          nutrientInputBase: 0.035,
-          nutrientUse: 0.03,
+          // Nutrient cycling
+          nutrientInputBase: 0.04,
+          nutrientUse: 0.022,
           nutrientRecycleAlgae: 0.02,
-          nutrientRecycleGrazing: 0.02,
-          nutrientRecycleDaphnia: 0.01,
+          nutrientRecycleGrazing: 0.015,
+          nutrientRecycleDaphnia: 0.008,
         };
 
         function clamp(v, lo, hi) {
@@ -256,12 +250,13 @@
             params.nutrientRecycleGrazing * grazingLossPerMl / 1e7 +
             params.nutrientRecycleDaphnia * (params.mD * d) / VOLUME_ML;
 
+          const daphniaCap = 115 + 20 * nutrientEffect; // keeps totals in the low hundreds
+          const crowdingFactor = Math.max(0, 1 - d / daphniaCap);
+          const daphniaBirths = params.eD * totalGrazing * crowdingFactor;
+
           const dN = nutrientReturn - nutrientDrawdown;
           const dA = algalGrowth - grazingLossPerMl - params.mA * a;
-          const dD =
-            params.eD * totalGrazing -
-            params.mD * d -
-            params.qD * d * d;
+          const dD = daphniaBirths - params.mD * d;
 
           return [dN, dA, dD];
         }
@@ -715,7 +710,7 @@
                 <div className="note small">
                   Model notes: algal growth is nutrient-limited and crowding-limited;
                   Daphnia grazing follows a Holling type II response; reproduction is
-                  tied to food intake; mortality, weak self-limitation, and nutrient recycling are built in.
+                  tied to food intake; mortality, a hard population ceiling, and nutrient recycling are built in.
                 </div>
               </div>
             </div>
