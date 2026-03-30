@@ -130,16 +130,16 @@
         const SIM_DURATION = 14.0;
         const CHECK_DAY = 7.0;
         const VOLUME_ML = 50.0;
-        const INITIAL_ALGAE_CONC = 7.5e6; // 75 x 10^5 cells/mL
-        const DEFAULT_DAPHNIA = 4;
+        const INITIAL_ALGAE_CONC = 7.5e6;
+        const DEFAULT_DAPHNIA = 15;
         const dt = 0.003;
         const stepsPerFrame = 8;
 
-        // These are the starting conditions students set before pressing Start.
+        // Starting conditions set before pressing Start.
         const [startNutrientLevel, setStartNutrientLevel] = useState(1);
         const [startDaphnia, setStartDaphnia] = useState(DEFAULT_DAPHNIA);
 
-        // These are the running simulation values.
+        // Running state.
         const [nutrient, setNutrient] = useState(1);
         const [algaeConc, setAlgaeConc] = useState(INITIAL_ALGAE_CONC);
         const [daphnia, setDaphnia] = useState(DEFAULT_DAPHNIA);
@@ -160,18 +160,19 @@
           lastHistoryT: 0,
         });
 
+        // Stronger top-down effect so predator changes are visible.
         const params = {
-          muMax: 0.30,
+          muMax: 0.28,
           kN: 0.20,
-          mA: 0.04,
-          KBase: 1.1e7,
-          KBoost: 1.8e7,
+          mA: 0.05,
+          KBase: 1.0e7,
+          KBoost: 1.6e7,
 
-          // Stronger grazing so top-down changes are easier for students to see.
-          gMax: 2.0e6,
-          hA: 1.5e6,
+          gMax: 2.5e6,
+          hA: 1.2e6,
+          predatorAmplifier: 10,
           eD: 2.0e-5,
-          mD: 0.12,
+          mD: 0.10,
 
           nutrientUse: 0.18,
           nutrientRecycleAlgae: 0.06,
@@ -217,13 +218,38 @@
         }, [startNutrientLevel, startDaphnia]);
 
         function derivatives(state) {
+          const n = Math.max(0, state.nutrient);
+          const a = Math.max(0, state.algae);
+          const d = Math.max(0, state.daphnia);
+
+          const nutrientEffect = n / (params.kN + n);
+          const carryingCapacity = params.KBase + params.KBoost * nutrientEffect;
+
+          const algalGrowth =
+            params.muMax *
+            nutrientEffect *
+            a *
+            Math.max(0, 1 - a / carryingCapacity);
+
           const grazingPerDaphnia = (params.gMax * a) / (params.hA + a);
+          const totalGrazing =
+            params.predatorAmplifier * grazingPerDaphnia * d;
 
-// teaching scale: makes top-down grazing visible to students
-const predatorAmplifier = 12;
-const totalGrazing = predatorAmplifier * grazingPerDaphnia * d;
+          const grazingLossPerMl = totalGrazing / VOLUME_ML;
 
-const grazingLossPerMl = totalGrazing / VOLUME_ML;
+          const nutrientDrawdown =
+            params.nutrientUse * (algalGrowth / INITIAL_ALGAE_CONC);
+
+          const nutrientReturn =
+            params.nutrientRecycleAlgae * (params.mA * a) / INITIAL_ALGAE_CONC +
+            params.nutrientRecycleGrazing * grazingLossPerMl / INITIAL_ALGAE_CONC +
+            params.nutrientRecycleDaphnia * (params.mD * d) / VOLUME_ML;
+
+          const dN = nutrientReturn - nutrientDrawdown;
+          const dA = algalGrowth - grazingLossPerMl - params.mA * a;
+          const dD = params.eD * totalGrazing - params.mD * d;
+
+          return [dN, dA, dD];
         }
 
         function rk4Step(state, dtDays) {
@@ -289,9 +315,7 @@ const grazingLossPerMl = totalGrazing / VOLUME_ML;
               lastRecorded = cur.t;
             }
 
-            if (cur.t >= SIM_DURATION) {
-              break;
-            }
+            if (cur.t >= SIM_DURATION) break;
           }
 
           cur.lastHistoryT = lastRecorded;
@@ -316,9 +340,7 @@ const grazingLossPerMl = totalGrazing / VOLUME_ML;
 
         useEffect(() => {
           if (!running) {
-            if (rafRef.current) {
-              cancelAnimationFrame(rafRef.current);
-            }
+            if (rafRef.current) cancelAnimationFrame(rafRef.current);
             return;
           }
 
@@ -330,9 +352,7 @@ const grazingLossPerMl = totalGrazing / VOLUME_ML;
           rafRef.current = requestAnimationFrame(loop);
 
           return () => {
-            if (rafRef.current) {
-              cancelAnimationFrame(rafRef.current);
-            }
+            if (rafRef.current) cancelAnimationFrame(rafRef.current);
           };
           // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [running]);
@@ -657,15 +677,17 @@ const grazingLossPerMl = totalGrazing / VOLUME_ML;
                   <div className="small" style={{ marginBottom: 6 }}>
                     Starting daphnia count
                   </div>
+
                   <input
                     type="range"
                     min={0}
-                    max={20}
+                    max={80}
                     step={1}
                     value={startDaphnia}
                     disabled={running}
                     onChange={(e) => setStartDaphnia(+e.target.value)}
                   />
+
                   <div className="small">
                     Daphnia: <strong>{Math.round(startDaphnia)}</strong>
                   </div>
