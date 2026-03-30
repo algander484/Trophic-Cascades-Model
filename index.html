@@ -2,10 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta
-      name="viewport"
-      content="width=device-width,initial-scale=1"
-    />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Algae–Daphnia Trophic Cascade Model</title>
 
     <style>
@@ -115,6 +112,111 @@
         background: #f8fafc;
         border: 1px solid #e2e8f0;
       }
+
+      .control-map {
+        margin-top: 12px;
+        padding: 12px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+      }
+
+      .flow {
+        display: grid;
+        grid-template-columns: 1fr 72px 1fr 72px 1fr;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .node {
+        padding: 12px 10px;
+        border-radius: 14px;
+        text-align: center;
+        font-weight: 700;
+        border: 1px solid #e2e8f0;
+        background: #fff;
+      }
+
+      .node small {
+        display: block;
+        margin-top: 4px;
+        font-weight: 600;
+        color: #475569;
+      }
+
+      .nutrient-node {
+        background: #eff6ff;
+        border-color: #bfdbfe;
+      }
+
+      .algae-node {
+        background: #ecfdf5;
+        border-color: #86efac;
+      }
+
+      .daphnia-node {
+        background: #fff7ed;
+        border-color: #fdba74;
+      }
+
+      .arrow-box {
+        text-align: center;
+        font-size: 12px;
+        font-weight: 700;
+        color: #334155;
+      }
+
+      .arrow-line {
+        height: 2px;
+        background: #94a3b8;
+        position: relative;
+        margin: 0 8px;
+      }
+
+      .arrow-line::after {
+        content: "";
+        position: absolute;
+        right: -1px;
+        top: -4px;
+        border-left: 8px solid #94a3b8;
+        border-top: 5px solid transparent;
+        border-bottom: 5px solid transparent;
+      }
+
+      .meter {
+        margin-top: 10px;
+      }
+
+      .meter-head {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        margin-bottom: 4px;
+      }
+
+      .meter-track {
+        height: 10px;
+        background: #e2e8f0;
+        border-radius: 999px;
+        overflow: hidden;
+      }
+
+      .meter-fill {
+        height: 100%;
+        border-radius: 999px;
+      }
+
+      .bottom-up-fill {
+        background: #22c55e;
+      }
+
+      .top-down-fill {
+        background: #f97316;
+      }
+
+      .disabled-note {
+        opacity: 0.7;
+      }
     </style>
 
     <script
@@ -143,7 +245,6 @@
         const dt = 0.003;
         const stepsPerFrame = 8;
 
-        // Nutrient levels: 0x, 1x, 2x
         const [nutrientLevel, setNutrientLevel] = useState(1);
         const [nutrient, setNutrient] = useState(1);
         const [algaeConc, setAlgaeConc] = useState(INITIAL_ALGAE_CONC);
@@ -186,6 +287,10 @@
         function clamp(v, lo, hi) {
           return Math.max(lo, Math.min(hi, v));
         }
+
+        const nutrientEffect = nutrient / (params.kN + nutrient);
+        const bottomUpStrength = clamp(nutrientEffect, 0, 1);
+        const topDownStrength = clamp(daphnia / 20, 0, 1);
 
         function resetSimulation(nextNutrientLevel = nutrientLevel) {
           const nextState = {
@@ -394,7 +499,6 @@
             };
           }
 
-          // Slightly larger algae dots
           const algaeDots = clamp(
             Math.round((algaeConc / INITIAL_ALGAE_CONC) * 500),
             50,
@@ -425,11 +529,7 @@
           ctx.fillStyle = "#0f172a";
           ctx.font = "16px system-ui, -apple-system, sans-serif";
           ctx.fillText(`Time: ${timeDays.toFixed(2)} days`, 18, 28);
-          ctx.fillText(
-            `Nutrient level: ${nutrient.toFixed(2)}x`,
-            18,
-            52
-          );
+          ctx.fillText(`Nutrient level: ${nutrient.toFixed(2)}x`, 18, 52);
           ctx.fillText(
             `Algae: ${Math.round(algaeConc).toLocaleString()} cells/mL`,
             18,
@@ -584,6 +684,71 @@
               one-week check marked on the plots.
             </p>
 
+            <div className="control-map card">
+              <h4 className="section-title">How control works in this model</h4>
+
+              <div className="flow">
+                <div className="node nutrient-node">
+                  Nutrients
+                  <small>Bottom-up driver</small>
+                  <small>{nutrient.toFixed(2)}x</small>
+                </div>
+
+                <div className="arrow-box">
+                  <div className="arrow-line"></div>
+                  <div style={{ marginTop: 6 }}>bottom-up</div>
+                </div>
+
+                <div className="node algae-node">
+                  Algae
+                  <small>Primary producer</small>
+                  <small>{Math.round(algaeConc).toLocaleString()} cells/mL</small>
+                </div>
+
+                <div className="arrow-box">
+                  <div className="arrow-line"></div>
+                  <div style={{ marginTop: 6 }}>top-down</div>
+                </div>
+
+                <div className="node daphnia-node">
+                  Daphnia
+                  <small>Top predator / grazer</small>
+                  <small>{Math.round(daphnia)}</small>
+                </div>
+              </div>
+
+              <div className="meter">
+                <div className="meter-head">
+                  <span>Bottom-up control</span>
+                  <span>{Math.round(bottomUpStrength * 100)}%</span>
+                </div>
+                <div className="meter-track">
+                  <div
+                    className="meter-fill bottom-up-fill"
+                    style={{ width: `${bottomUpStrength * 100}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="meter">
+                <div className="meter-head">
+                  <span>Top-down control</span>
+                  <span>{Math.round(topDownStrength * 100)}%</span>
+                </div>
+                <div className="meter-track">
+                  <div
+                    className="meter-fill top-down-fill"
+                    style={{ width: `${topDownStrength * 100}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="small" style={{ marginTop: 10 }}>
+                Bottom-up control means more nutrients allow more algal growth. Top-down control means
+                more Daphnia grazing suppresses algae.
+              </div>
+            </div>
+
             <div className="row">
               <div className="col card">
                 <canvas ref={dishRef} style={{ width: "100%", height: 380 }} />
@@ -637,7 +802,7 @@
 
                 <div style={{ marginBottom: 14 }}>
                   <div className="small" style={{ marginBottom: 6 }}>
-                    Starting nutrient level
+                    Starting nutrient level (bottom-up resource)
                   </div>
 
                   <input
@@ -646,6 +811,7 @@
                     max={2}
                     step={1}
                     value={nutrientLevel}
+                    disabled={running}
                     onChange={(e) => setNutrientLevel(+e.target.value)}
                   />
 
@@ -656,15 +822,15 @@
                   <div className="small" style={{ marginTop: 6 }}>
                     Quick:
                     {" "}
-                    <button className="quick-btn" onClick={() => setNutrientLevel(0)}>0x</button>{" "}
-                    <button className="quick-btn" onClick={() => setNutrientLevel(1)}>1x</button>{" "}
-                    <button className="quick-btn" onClick={() => setNutrientLevel(2)}>2x</button>
+                    <button className="quick-btn" onClick={() => setNutrientLevel(0)} disabled={running}>0x</button>{" "}
+                    <button className="quick-btn" onClick={() => setNutrientLevel(1)} disabled={running}>1x</button>{" "}
+                    <button className="quick-btn" onClick={() => setNutrientLevel(2)} disabled={running}>2x</button>
                   </div>
                 </div>
 
-                <div style={{ marginBottom: 14 }}>
+                <div style={{ marginBottom: 14 }} className={running ? "disabled-note" : ""}>
                   <div className="small" style={{ marginBottom: 6 }}>
-                    Starting daphnia count
+                    Starting daphnia count (top-down grazer)
                   </div>
                   <input
                     type="range"
@@ -672,6 +838,7 @@
                     max={20}
                     step={1}
                     value={daphnia}
+                    disabled={running}
                     onChange={(e) => {
                       const nextD = +e.target.value;
                       setDaphnia(nextD);
@@ -688,7 +855,7 @@
                     Daphnia: <strong>{Math.round(daphnia)}</strong>
                   </div>
                   <div className="small" style={{ marginTop: 6 }}>
-                    Increase this before pressing Start to test stronger top-down grazing.
+                    Set this before pressing Start to test stronger top-down grazing.
                   </div>
                 </div>
 
@@ -696,6 +863,11 @@
                   Model notes: algal growth is nutrient-limited and crowding-limited;
                   Daphnia grazing follows a Holling type II response; reproduction is
                   tied to food intake; mortality and nutrient recycling are built in.
+                </div>
+
+                <div className="note small">
+                  Teaching note: the sliders set the starting conditions. Once the run begins,
+                  the model shows how bottom-up resource supply and top-down grazing interact over time.
                 </div>
               </div>
             </div>
