@@ -131,7 +131,7 @@
         const CHECK_DAY = 7.0;
         const VOLUME_ML = 50.0;
         const INITIAL_ALGAE_CONC = 4.6e5;
-        const DEFAULT_DAPHNIA = 5;
+        const DEFAULT_DAPHNIA = 4;
         const dt = 0.003;
         const stepsPerFrame = 8;
 
@@ -159,15 +159,15 @@
         });
 
                 const params = {
-          muMax: 0.82,
+          muMax: 0.92,
           kN: 0.18,
           mA: 0.05,
-          KBase: 4.8e6,
-          KBoost: 2.1e7,
+          KBase: 6.2e6,
+          KBoost: 5.6e7,
 
-          gMax: 1.4e6,
-          hA: 1.05e6,
-          mD: 0.014,
+          gMax: 1.05e6,
+          hA: 1.1e6,
+          mD: 0.015,
 
           foodHalfSat: 65000,
 
@@ -220,10 +220,11 @@
           const d = Math.max(0, state.daphnia);
 
           const nutrientEffect = n / (params.kN + n);
-          const carryingCapacity = params.KBase + params.KBoost * nutrientEffect;
+          const algaeNutrientEffect = (n * n) / (0.85 + n * n);
+          const carryingCapacity = params.KBase + params.KBoost * algaeNutrientEffect;
 
           const algalGrowth =
-            params.muMax * nutrientEffect * a * Math.max(0, 1 - a / carryingCapacity);
+            params.muMax * (0.15 + 0.85 * algaeNutrientEffect) * a * Math.max(0, 1 - a / carryingCapacity);
 
           const grazingPerDaphnia = (params.gMax * a) / (params.hA + a);
           const totalGrazing = grazingPerDaphnia * d;
@@ -241,10 +242,10 @@
             grazingLossPerMl / (grazingLossPerMl + params.foodHalfSat);
 
           const birthRate =
-            0.04 + 0.18 * foodIndex + 0.12 * nutrientEffect;
+            0.03 + 0.16 * foodIndex + 0.11 * nutrientEffect;
 
           const crowdingLimit =
-            16 + 28 * nutrientEffect + 22 * foodIndex;
+            15 + 24 * nutrientEffect + 22 * foodIndex;
 
           const dN = nutrientReturn - nutrientDrawdown;
           const dA = algalGrowth - grazingLossPerMl - params.mA * a;
@@ -573,7 +574,7 @@
           <div className="container">
             <h2 style={{ marginBottom: 6 }}>Algae–Daphnia Trophic Cascade Model</h2>
             <p className="small" style={{ marginTop: 0 }}>
-              This version starts algae at 4.6 × 10^5 cells/mL and starts Daphnia at 4. It is tuned so 1x nutrients should end with daphnia roughly in the 30–60 range, 2x nutrients should end higher, and 0x nutrients should end lower. The culture jar is 50 mL total, and the simulation runs
+              This version starts algae at 4.6 × 10^5 cells/mL and starts Daphnia at 4. It is tuned so 1x nutrients should end with daphnia roughly in the 30–60 range, 2x nutrients should end higher, and 0x nutrients should end lower. Algae now has a stronger nutrient response so 2x should sit above 1x. The culture jar is 50 mL total, and the simulation runs
               for 14 days with a one-week check marked on the plots.
             </p>
 
