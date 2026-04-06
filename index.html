@@ -153,6 +153,7 @@
         const simRef = useRef({
           t: 0,
           nutrient: 1,
+          startNutrient: 1,
           algae: INITIAL_ALGAE_CONC,
           daphnia: DEFAULT_DAPHNIA,
           lastHistoryT: 0,
@@ -188,6 +189,7 @@
           const nextState = {
             t: 0,
             nutrient: nextNutrientLevel,
+            startNutrient: nextNutrientLevel,
             algae: INITIAL_ALGAE_CONC,
             daphnia: nextDaphnia,
             lastHistoryT: 0,
@@ -220,6 +222,7 @@
           const d = Math.max(0, state.daphnia);
 
           const nutrientEffect = n / (params.kN + n);
+          const nutrientSetting = Math.max(0, state.startNutrient ?? n);
           const algaeNutrientEffect = (n * n) / (0.85 + n * n);
           const carryingCapacity = params.KBase + params.KBoost * algaeNutrientEffect;
 
@@ -241,13 +244,13 @@
           const foodIndex =
             grazingLossPerMl / (grazingLossPerMl + params.foodHalfSat);
 
-          const nutrientDrive = 0.10 + 0.26 * n + 0.22 * n * n;
+          const nutrientDrive = 0.12 + 0.30 * nutrientSetting + 0.35 * nutrientSetting * nutrientSetting;
 
           const birthRate =
             (0.02 + 0.18 * foodIndex) * nutrientDrive;
 
           const crowdingLimit =
-            9 + 8 * n + 14 * n * n + 18 * foodIndex;
+            9 + 7 * nutrientSetting + 18 * nutrientSetting * nutrientSetting + 18 * foodIndex;
 
           const dN = nutrientReturn - nutrientDrawdown;
           const dA = algalGrowth - grazingLossPerMl - params.mA * a;
@@ -261,6 +264,7 @@
 
           const s2 = {
             nutrient: state.nutrient + 0.5 * dtDays * k1N,
+            startNutrient: state.startNutrient,
             algae: state.algae + 0.5 * dtDays * k1A,
             daphnia: state.daphnia + 0.5 * dtDays * k1D,
           };
@@ -268,6 +272,7 @@
 
           const s3 = {
             nutrient: state.nutrient + 0.5 * dtDays * k2N,
+            startNutrient: state.startNutrient,
             algae: state.algae + 0.5 * dtDays * k2A,
             daphnia: state.daphnia + 0.5 * dtDays * k2D,
           };
@@ -275,6 +280,7 @@
 
           const s4 = {
             nutrient: state.nutrient + dtDays * k3N,
+            startNutrient: state.startNutrient,
             algae: state.algae + dtDays * k3A,
             daphnia: state.daphnia + dtDays * k3D,
           };
@@ -285,6 +291,7 @@
             nutrient:
               state.nutrient +
               (dtDays / 6) * (k1N + 2 * k2N + 2 * k3N + k4N),
+            startNutrient: state.startNutrient,
             algae:
               state.algae +
               (dtDays / 6) * (k1A + 2 * k2A + 2 * k3A + k4A),
@@ -576,7 +583,7 @@
           <div className="container">
             <h2 style={{ marginBottom: 6 }}>Algae–Daphnia Trophic Cascade Model</h2>
             <p className="small" style={{ marginTop: 0 }}>
-              This version starts algae at 4.6 × 10^5 cells/mL and starts Daphnia at 4. It is tuned so 1x nutrients should end with daphnia roughly in the 30–60 range, 2x nutrients should end higher, and 0x nutrients should end lower. Algae now has a stronger nutrient response so 2x should sit above 1x. Daphnia are now given a much stronger nutrient separation so 2x should end noticeably above 1x rather than clustering near it. The culture jar is 50 mL total, and the simulation runs
+              This version starts algae at 4.6 × 10^5 cells/mL and starts Daphnia at 4. It is tuned so 1x nutrients should end with daphnia roughly in the 30–60 range, 2x nutrients should end higher, and 0x nutrients should end lower. Algae now has a stronger nutrient response so 2x should sit above 1x. Daphnia are now driven partly by the starting nutrient treatment itself, so 2x should stay clearly above 1x instead of collapsing back to the same endpoint. The culture jar is 50 mL total, and the simulation runs
               for 14 days with a one-week check marked on the plots.
             </p>
 
