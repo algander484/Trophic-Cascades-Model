@@ -225,10 +225,11 @@
           const grazingLossPerMl = totalGrazing / VOLUME_ML;
 
           const foodIndex = grazingLossPerMl / (grazingLossPerMl + params.foodHalfSat);
-          const foodBoost = 0.22 + 0.78 * foodIndex;
-          const nutrientBoost = 0.18 + 0.36 * nutrientSignal + 0.22 * nutrientSignal * nutrientSignal;
-          const growthRate = foodBoost * nutrientBoost;
-          const crowdingLimit = 18 + 10 * nutrientSignal + 16 * nutrientSignal * nutrientSignal + 18 * foodIndex;
+          const nutrientBoost = 0.35 + 0.65 * nutrientSignal;
+          const daphniaTarget =
+            8 + 16 * nutrientSignal + 9 * nutrientSignal * nutrientSignal + 18 * foodIndex;
+          const growthRate = 0.75 * nutrientBoost * (0.55 + 0.45 * foodIndex);
+          const crowdingLimit = daphniaTarget + 14;
 
           const nutrientDrawdown = params.nutrientUse * (algalGrowth / INITIAL_ALGAE_CONC);
           const nutrientReturn =
@@ -238,7 +239,7 @@
 
           const dN = nutrientReturn - nutrientDrawdown;
           const dA = algalGrowth - grazingLossPerMl - params.mA * a;
-          const dD = growthRate * d * (1 - d / crowdingLimit);
+          const dD = growthRate * (daphniaTarget - d) - 0.015 * d * (d / crowdingLimit);
 
           return [dN, dA, dD];
         }
