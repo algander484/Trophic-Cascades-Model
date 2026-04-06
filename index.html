@@ -241,11 +241,13 @@
           const foodIndex =
             grazingLossPerMl / (grazingLossPerMl + params.foodHalfSat);
 
+          const nutrientDrive = 0.18 + 0.42 * n;
+
           const birthRate =
-            0.03 + 0.16 * foodIndex + 0.11 * nutrientEffect;
+            (0.03 + 0.16 * foodIndex) * nutrientDrive;
 
           const crowdingLimit =
-            15 + 24 * nutrientEffect + 22 * foodIndex;
+            12 + 18 * n + 22 * foodIndex;
 
           const dN = nutrientReturn - nutrientDrawdown;
           const dA = algalGrowth - grazingLossPerMl - params.mA * a;
@@ -574,7 +576,7 @@
           <div className="container">
             <h2 style={{ marginBottom: 6 }}>Algae–Daphnia Trophic Cascade Model</h2>
             <p className="small" style={{ marginTop: 0 }}>
-              This version starts algae at 4.6 × 10^5 cells/mL and starts Daphnia at 4. It is tuned so 1x nutrients should end with daphnia roughly in the 30–60 range, 2x nutrients should end higher, and 0x nutrients should end lower. Algae now has a stronger nutrient response so 2x should sit above 1x. The culture jar is 50 mL total, and the simulation runs
+              This version starts algae at 4.6 × 10^5 cells/mL and starts Daphnia at 4. It is tuned so 1x nutrients should end with daphnia roughly in the 30–60 range, 2x nutrients should end higher, and 0x nutrients should end lower. Algae now has a stronger nutrient response so 2x should sit above 1x. Daphnia are also given a stronger nutrient separation so 2x ends noticeably above 1x rather than clustering near it. The culture jar is 50 mL total, and the simulation runs
               for 14 days with a one-week check marked on the plots.
             </p>
 
