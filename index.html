@@ -167,7 +167,7 @@
 
           gMax: 1.05e6,
           hA: 1.1e6,
-          mD: 0.015,
+          mD: 0.012,
 
           foodHalfSat: 65000,
 
@@ -241,13 +241,13 @@
           const foodIndex =
             grazingLossPerMl / (grazingLossPerMl + params.foodHalfSat);
 
-          const nutrientDrive = 0.18 + 0.42 * n;
+          const nutrientDrive = 0.10 + 0.26 * n + 0.22 * n * n;
 
           const birthRate =
-            (0.03 + 0.16 * foodIndex) * nutrientDrive;
+            (0.02 + 0.18 * foodIndex) * nutrientDrive;
 
           const crowdingLimit =
-            12 + 18 * n + 22 * foodIndex;
+            9 + 8 * n + 14 * n * n + 18 * foodIndex;
 
           const dN = nutrientReturn - nutrientDrawdown;
           const dA = algalGrowth - grazingLossPerMl - params.mA * a;
@@ -576,7 +576,7 @@
           <div className="container">
             <h2 style={{ marginBottom: 6 }}>Algae–Daphnia Trophic Cascade Model</h2>
             <p className="small" style={{ marginTop: 0 }}>
-              This version starts algae at 4.6 × 10^5 cells/mL and starts Daphnia at 4. It is tuned so 1x nutrients should end with daphnia roughly in the 30–60 range, 2x nutrients should end higher, and 0x nutrients should end lower. Algae now has a stronger nutrient response so 2x should sit above 1x. Daphnia are also given a stronger nutrient separation so 2x ends noticeably above 1x rather than clustering near it. The culture jar is 50 mL total, and the simulation runs
+              This version starts algae at 4.6 × 10^5 cells/mL and starts Daphnia at 4. It is tuned so 1x nutrients should end with daphnia roughly in the 30–60 range, 2x nutrients should end higher, and 0x nutrients should end lower. Algae now has a stronger nutrient response so 2x should sit above 1x. Daphnia are now given a much stronger nutrient separation so 2x should end noticeably above 1x rather than clustering near it. The culture jar is 50 mL total, and the simulation runs
               for 14 days with a one-week check marked on the plots.
             </p>
 
