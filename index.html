@@ -81,13 +81,13 @@
         });
 
         const params = {
-          muMax: 0.78,
+          muMax: 0.92,
           kN: 0.18,
           mA: 0.05,
-          KBase: 4.6e6,
-          KBoost: 3.0e7,
-          gMax: 8.6e5,
-          hA: 1.25e6,
+          KBase: 5.8e6,
+          KBoost: 4.4e7,
+          gMax: 6.1e5,
+          hA: 1.55e6,
           foodHalfSat: 90000,
           nutrientUse: 0.13,
           nutrientRecycleAlgae: 0.05,
@@ -143,19 +143,19 @@
 
           const algalGrowth =
             params.muMax *
-            (0.22 + 0.78 * algaeNutrientEffect) *
+            (0.30 + 0.70 * algaeNutrientEffect) *
             a *
             Math.max(0, 1 - a / carryingCapacity);
 
           const grazingPerDaphnia = (params.gMax * a) / (params.hA + a);
           const foodIndexBase = grazingPerDaphnia / (grazingPerDaphnia + params.foodHalfSat);
-          const grazingAmplifier = 1.2 + 0.45 * foodIndexBase;
+          const grazingAmplifier = 1.02 + 0.18 * foodIndexBase;
           const grazingLossPerMl = (grazingPerDaphnia * d * grazingAmplifier) / VOLUME_ML;
 
           const foodIndex = grazingLossPerMl / (grazingLossPerMl + params.foodHalfSat);
 
           const daphniaTarget =
-            4 + 10 * nutrientSignal + 8 * nutrientSignal * nutrientSignal + 12 * foodIndex;
+            4 + 9 * nutrientSignal + 7 * nutrientSignal * nutrientSignal + 10 * foodIndex;
 
           const daphniaGrowthRate =
             0.44 + 0.16 * nutrientSignal + 0.10 * foodIndex;
@@ -510,7 +510,7 @@
                 </div>
 
                 <div className="note small">
-                  Model notes: algae growth is nutrient-limited and crowding-limited. Daphnia grazing uses a Holling type II response with a stronger grazing amplifier, and Daphnia move toward a nutrient-dependent target so 1x and 2x separate more clearly.
+                  Model notes: algae growth is nutrient-limited and crowding-limited. Daphnia grazing uses a Holling type II response, and Daphnia move toward a nutrient-dependent target so 1x and 2x separate more clearly without collapsing algae too far.
                 </div>
 
                 <div className="note small">
